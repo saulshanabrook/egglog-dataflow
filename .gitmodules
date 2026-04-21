@@ -1,0 +1,52 @@
+[submodule "repos/ascent"]
+	path = repos/ascent
+	url = git@github.com:s-arash/ascent.git
+	branch = master
+[submodule "repos/blog"]
+	path = repos/blog
+	url = git@github.com:frankmcsherry/blog.git
+	branch = master
+[submodule "repos/columnar"]
+	path = repos/columnar
+	url = git@github.com:frankmcsherry/columnar.git
+	branch = master
+[submodule "repos/dataflow-join"]
+	path = repos/dataflow-join
+	url = git@github.com:frankmcsherry/dataflow-join.git
+	branch = master
+[submodule "repos/datatoad"]
+	path = repos/datatoad
+	url = git@github.com:frankmcsherry/datatoad.git
+	branch = main
+[submodule "repos/differential-dataflow"]
+	path = repos/differential-dataflow
+	url = git@github.com:TimelyDataflow/differential-dataflow.git
+	branch = master
+[submodule "repos/dynamic-datalog"]
+	path = repos/dynamic-datalog
+	url = git@github.com:frankmcsherry/dynamic-datalog.git
+	branch = master
+[submodule "repos/egglog"]
+	path = repos/egglog
+	url = git@github.com:egraphs-good/egglog.git
+	branch = main
+[submodule "repos/egglog-experimental"]
+	path = repos/egglog-experimental
+	url = git@github.com:egraphs-good/egglog-experimental.git
+	branch = main
+[submodule "repos/egglog-python"]
+	path = repos/egglog-python
+	url = git@github.com:egraphs-good/egglog-python.git
+	branch = main
+[submodule "repos/egglog-tutorial"]
+	path = repos/egglog-tutorial
+	url = git@github.com:egraphs-good/egglog-tutorial.git
+	branch = main
+[submodule "repos/flowlog"]
+	path = repos/flowlog
+	url = git@github.com:flowlog-rs/flowlog.git
+	branch = main
+[submodule "repos/timely-dataflow"]
+	path = repos/timely-dataflow
+	url = git@github.com:TimelyDataflow/timely-dataflow.git
+	branch = master
