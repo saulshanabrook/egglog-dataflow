@@ -12,6 +12,7 @@ index for deeper conclusions, methodology, option analysis, and source notes.
 | Path | Purpose |
 | --- | --- |
 | [synthesis.md](synthesis.md) | Consolidated evidence, continue/stop criteria, and possible next evidence-gathering work. |
+| [adversarial-review.md](adversarial-review.md) | Pre-sharing adversarial review of unsupported claims, missing blockers, and evidence gaps. |
 | [options/README.md](options/README.md) | Tradeoff analysis of the four backend boundary options. |
 | [methodology.md](methodology.md) | Detailed research framing, scientific questions, source inventory, reading order, and design risks. |
 | [source-notes/](source-notes/) | First-pass evidence notes by source cluster. |
@@ -38,7 +39,17 @@ matching and planning, while equality maintenance, rebuilding, containers,
 schedules, extension APIs, and frontend compatibility remain the main blockers
 to evaluate before committing to any implementation path.
 
-## Option Viability Pass
+## Adversarial Review
+
+- [adversarial-review.md](adversarial-review.md): integrated review before sharing.
+- [adversarial-notes/](adversarial-notes/): one note per adversarial review lens.
+
+The review found no P0/P1 contradictions in the current tradeoff framing. It
+does recommend keeping the docs caveated as hypotheses, treating provider-style
+relation boundaries as a cross-cutting design axis, and gathering measurements
+before making stronger recommendations.
+
+## Option Tradeoff Pass
 
 - [options/README.md](options/README.md): second-pass tradeoff analysis of the four
   backend boundary options from `synthesis.md`.

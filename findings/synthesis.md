@@ -142,6 +142,28 @@ owns equality, rebuild, containers, scheduling, custom providers, and most
 indexing, the maintenance argument becomes weak even if individual prototypes
 work.
 
+## Adversarial Review Update
+
+A pre-sharing adversarial review found no P0/P1 contradictions in this synthesis
+or the option framing (`adversarial-review.md`). The accepted corrections are
+mostly caveats about evidentiary weight:
+
+- The social and maintenance payoff should be treated as a hypothesis from the
+  conversations, not a validated outcome (`adversarial-notes/collaborator-readiness.md`).
+- FlowLog, datatoad, and `dataflow-join` are planner shapes and join-kernel
+  references, not drop-in reusable engines for egglog
+  (`adversarial-notes/dd-flowlog-substrate.md`).
+- Timestamp granularity, trace compaction, rebuild invalidation, and same-id
+  dirty refresh remain empirical questions; ordinary tuple deletes are not a
+  complete description of rebuild-triggered invalidation
+  (`adversarial-notes/dd-flowlog-substrate.md`).
+- Proof/term encoding is useful as a partial relational specification, but it
+  cannot validate the full Python/container/scheduler surface
+  (`adversarial-notes/egglog-semantics.md`).
+- Provider-style relation boundaries are a cross-cutting design axis. They may
+  deserve a separate option or sub-option once there is a concrete comparison
+  against the DD/native split (`adversarial-notes/option-completeness.md`).
+
 ## Option Tradeoff Update
 
 The second-pass option analysis reframes the options by long-term benefit and

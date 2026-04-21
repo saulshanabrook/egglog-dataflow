@@ -3,6 +3,11 @@
 This directory stores the second-pass tradeoff analysis for the four backend
 boundary options identified in `../synthesis.md`.
 
+These tradeoffs are working hypotheses. The adversarial review flags
+provider-style relation boundaries as a cross-cutting design axis that may
+deserve a separate option or sub-option after a concrete comparison
+(`../adversarial-review.md`).
+
 ## Option Tradeoffs
 
 | Option | Main Benefit | Long-Term Cost / Blocker | Note |
