@@ -124,6 +124,49 @@ If that boundary fails to reduce complexity or shows poor performance on
 rebuild/e-matching workloads, the project should pivot to borrowing specific
 ideas rather than pursuing a backend migration.
 
+## Option Viability Update
+
+The second-pass option analysis preserves the provisional conclusion and makes
+the implementation order sharper.
+
+1. **Likely first experiment: Option 1, native equality + DD/FlowLog rule
+   evaluation.** Continue as a hybrid prototype. It keeps union-find, rebuild,
+   containers, actions, analyses, and extraction native while testing DD/FlowLog
+   for maintained rule indexes and incremental body matching
+   (`options/option-1-native-equality-dd-rule-eval.md`).
+2. **Promising but deferred: Option 3, FlowLog/datatoad-like middle layer.**
+   Defer until the smaller data-exchange boundary is proven. It is the most
+   coherent long-term DD-backed architecture, but it requires a new relational
+   planner, WCOJ index story, recursive DD integration, and unresolved
+   equality/rebuild diff semantics
+   (`options/option-3-flowlog-datatoad-middle-layer.md`).
+3. **High-risk research path: Option 2, proof/term encoding to DD.** Defer as
+   the main production lowering, but keep it as a relational specification and
+   prototype oracle. It names the UF/view/rebuild state DD would need, but the
+   current encoding is high-overhead, incomplete for current egglog features,
+   and incompatible with presort/container semantics
+   (`options/option-2-proof-term-encoding-dd.md`).
+4. **Fallback/non-migration path: Option 4, no DD backend.** Continue as a
+   low-risk native improvement track and fallback. It borrows WCOJ/SIP planning,
+   provider interfaces, columnar storage experiments, and profiling without
+   risking frontend or container semantics
+   (`options/option-4-no-dd-backend-borrow-ideas.md`).
+
+Evidence that would change the ranking:
+
+- Option 1 moves down if rebuild invalidation requires nearly full state
+  retraction/reinsertion into DD on realistic equality merges, or if the native
+  action handoff creates stale/dedup-heavy match handling.
+- Option 3 moves up if a small rule-IR prototype can reuse DD arrangements or
+  datatoad/dataflow-join WCOJ kernels without maintaining a second full index
+  universe.
+- Option 2 moves up only if proof/term encoding overhead can be measured and
+  reduced on constructor/rebuild tests, and if containers get a credible native
+  side channel or encoding.
+- Option 4 becomes the primary path if backend migration fails to reduce
+  complexity, but borrowed planning/profiling/provider ideas still improve the
+  native backend.
+
 ## Next Experiments
 
 1. Build one constructor-only equality witness comparing native equality,

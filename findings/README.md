@@ -27,6 +27,18 @@ Current provisional conclusion: do not attempt a full egglog-on-DD rewrite yet.
 Continue with a narrow prototype centered on rule evaluation while keeping
 equality maintenance, rebuilding, containers, analyses, and extraction native.
 
+## Option Viability Pass
+
+- `options/README.md`: second-pass analysis of the four backend boundary
+  options from `synthesis.md`.
+
+Current option ranking:
+
+1. Option 1: native equality plus DD/FlowLog rule evaluation.
+2. Option 3: FlowLog/datatoad-like middle layer.
+3. Option 2: proof/term encoding to DD.
+4. Option 4: no DD backend, borrow ideas as fallback.
+
 ## Coverage
 
 The first reading pass covers every source cluster listed in the top-level
