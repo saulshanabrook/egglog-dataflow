@@ -1,11 +1,20 @@
 # Findings
 
-This directory stores durable research notes for deciding whether `egglog`
-should be moved onto Differential Dataflow or a related dataflow/database
-substrate.
+This directory stores the durable research context for deciding whether
+`egglog` should move part of its runtime onto Differential Dataflow or a related
+dataflow/database substrate.
 
-The README remains the project orientation. These files preserve the reading
-evidence and synthesis context for later planning.
+The top-level README is the short collaborator handoff. This directory is the
+index for deeper conclusions, methodology, option analysis, and source notes.
+
+## Entry Points
+
+| Path | Purpose |
+| --- | --- |
+| [synthesis.md](synthesis.md) | Current consolidated conclusion, continue/stop criteria, and next experiments. |
+| [options/README.md](options/README.md) | Ranked analysis of the four backend boundary options. |
+| [methodology.md](methodology.md) | Detailed research framing, scientific questions, source inventory, reading order, and design risks. |
+| [source-notes/](source-notes/) | First-pass evidence notes by source cluster. |
 
 ## Reading Status
 
@@ -20,7 +29,7 @@ evidence and synthesis context for later planning.
 
 ## Synthesis
 
-- `synthesis.md`: consolidated evidence, provisional conclusion, and next
+- [synthesis.md](synthesis.md): consolidated evidence, provisional conclusion, and next
   experiments.
 
 Current provisional conclusion: do not attempt a full egglog-on-DD rewrite yet.
@@ -29,7 +38,7 @@ equality maintenance, rebuilding, containers, analyses, and extraction native.
 
 ## Option Viability Pass
 
-- `options/README.md`: second-pass analysis of the four backend boundary
+- [options/README.md](options/README.md): second-pass analysis of the four backend boundary
   options from `synthesis.md`.
 
 Current option ranking:
