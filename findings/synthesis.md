@@ -122,6 +122,10 @@ Evidence to stop:
    - Build or adapt an intermediate relational planner with DD execution,
      datatoad/WCOJ operators for selected joins, and egglog-specific operators
      for rebuild/equality deltas.
+   - Refinement: the middle layer may also own physical schedule lowering,
+     splitting one logical ruleset into many small DD iterations when that
+     preserves user-visible semantics
+     (`options/option-3-small-iteration-scheduling-refinement.md`).
    - Potential benefit: could support a long-term relational architecture using
      FlowLog-like planner structure and datatoad/dataflow-join-style join
      kernels between the frontend and runtime.
@@ -203,7 +207,10 @@ blocker rather than by a preferred order.
   kernels behind egglog's frontend. Main blocker before trying: avoid building a
   second full database engine before proving which egglog relations, indexes,
   providers, and invalidation events actually belong outside the native backend
-  (`options/option-3-flowlog-datatoad-middle-layer.md`).
+  (`options/option-3-flowlog-datatoad-middle-layer.md`). A scheduling
+  refinement splits logical egglog schedules from physical execution schedules,
+  then tests many small DD iterations against the current bulk ruleset iteration
+  (`options/option-3-small-iteration-scheduling-refinement.md`).
 - **Option 4: no DD backend, borrow ideas.** Long-term benefit: lower migration
   risk for existing semantics, with incremental adoption of WCOJ, provider,
   columnar, profiling, and rule-IR ideas. Main blocker before trying: this may
@@ -220,6 +227,9 @@ Evidence that would clarify the choice:
 - Option 3 needs a small rule-IR sketch showing whether DD arrangements or
   datatoad/dataflow-join WCOJ kernels can be reused without maintaining a second
   full index universe.
+- The Option 3 scheduling refinement needs evidence that small DD iterations
+  improve parallel throughput or memory without changing user-visible schedule
+  semantics, especially for custom schedulers.
 - Option 4 needs evidence that borrowed planning/profiling/provider ideas can
   address important egglog workloads well enough that the shared-substrate
   migration is not worth the cost.
@@ -243,6 +253,9 @@ Evidence that would clarify the choice:
 - Classify 3-5 real egglog rules as acyclic, cyclic, repeated-variable, or
   equality-heavy, then compare source-order binary joins with a WCOJ-style
   operator on at least one cyclic pattern.
+- Prototype one FlowLog/DD-style micro-iteration schedule for an egglog ruleset
+  and compare it with current bulk iteration on throughput, progress traffic,
+  retained trace state, rebuild invalidation volume, and final saturation.
 - Sketch the minimum custom-provider interface required for equality,
   containers, and columnar relation storage, using Ascent BYODS as the
   comparison point.

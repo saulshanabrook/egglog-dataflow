@@ -16,6 +16,7 @@
 - `repos/dataflow-join/src/lib.rs`: streaming incremental WCOJ API and generic-join prefix extension.
 - `repos/dataflow-join/src/extender.rs`: indexed stream extender implementation for count/propose/intersect over timely streams.
 - `repos/dataflow-join/src/index.rs`: multiversion keyed index and LSM-like update storage used by `dataflow-join`.
+- `messages/dec-17-2025-slack.md`: Yihong/Hangdong notes on FlowLog, DD parallelism through many small iterations, nested fixpoints, and schedule questions.
 - `papers/FlowLog Efficient and Extensible Datalog via Incrementality.pdf`: paper text extracted with `uv run --with pypdf`; used for FlowLog's claimed IR/control split, DD substrate, SIP, and robust planning goals.
 - `papers/Free Join Unifying Worst-Case Optimal and Traditional Joins.pdf`: paper text extracted with `uv run --with pypdf`; used for WCOJ/binary-join unification and cyclic/acyclic tradeoff framing.
 - `papers/leapfrog treejoin.pdf`: paper text extracted with `uv run --with pypdf`; used for triejoin variable-order and worst-case-optimal join context.
@@ -24,6 +25,7 @@
 ## Key Findings
 - Egglog rule evaluation maps best to FlowLog-style planning as the outer architecture: FlowLog explicitly separates per-rule logical plans from recursive control, then lowers planned transformations into DD iterative scopes (`repos/flowlog/crates/planner/src/stratum_planner.rs`, `repos/flowlog/crates/compiler/src/flow/recursive.rs`). That makes FlowLog a planner-shape reference, not a drop-in engine.
 - FlowLog is not just "direct DD collections"; it adds Datalog-specific metadata before DD lowering: recursive vs non-recursive transformations, recursion enter/leave collections, accumulative vs iterative recursive relations, IDB-to-head maps, and aggregation metadata (`repos/flowlog/crates/planner/src/stratum_planner.rs`). An egglog backend would need its own adapter and invalidation model around that shape.
+- FlowLog also suggests that the physical execution schedule can be part of the substrate design. The local Slack notes report that FlowLog tries to spread work across many small DD iterations so operators can overlap work across iterations, instead of presenting one large batch to the incremental engine (`messages/dec-17-2025-slack.md`). For egglog, Option 3 could lower a logical ruleset into smaller physical schedule units rather than preserving the current bulk iteration shape.
 - FlowLog's current code is useful but not sufficient as a planner: `PlanTree::from_catalog` builds a left-deep chain in source order and `get_first_join_tuple_index` returns `(0, 1)`, with cost-based/heuristic reordering left as future work (`repos/flowlog/crates/optimizer/src/plan_tree.rs`). For egglog, naive binary join ordering is likely too brittle for large e-matching queries.
 - Datatoad is the strongest evidence for a WCOJ join kernel: `ExecAtom` exposes count/propose/join, and `wco_join_inner` picks the atom with fewest extensions per prefix, proposes from it, then validates against the others (`repos/datatoad/src/rules/exec.rs`). This is join-kernel inspiration for cyclic/multiway bodies, not a reusable engine.
 - Datatoad's representation is a bigger commitment than a plug-in operator: its facts are `Salad`/`FactLSM<Forest<Terms>>` values with column permutation, trie layers, pruning, exchange, and bulk layout changes (`repos/datatoad/src/rules/exec.rs`, `repos/datatoad/src/facts/trie.rs`). Egglog would need an egglog-specific adapter, index layout, and invalidation model to make that work.
@@ -33,6 +35,7 @@
 ## Relevance To The Main Objective
 - This supports moving egglog onto DD only if the design includes a planning layer above DD collections. DD gives incremental iteration and arrangements, but the inspected systems suggest rule evaluation needs explicit planning for recursion boundaries, arrangements, join order, semijoins, and aggregation-like postprocessing.
 - A FlowLog-style substrate is a plausible shape for egglog-on-DD: compile egglog rules/e-matches into a relational IR, stratify or otherwise separate recursive saturation control, then lower to DD transformations. That still leaves adapter, index, and invalidation work specific to egglog.
+- The substrate could also own physical schedule lowering: a user-facing egglog ruleset could be split into many smaller DD iterations or delta tasks if the split preserves logical schedule semantics and rebuild invalidation.
 - Datatoad-style WCOJ should be considered a join operator family inside that planner, not the whole substrate. It is most relevant for cyclic/high-arity rule bodies where binary joins create large intermediates.
 - Direct DD collections are still the execution target, but using them directly as the design abstraction would under-specify rule planning and likely recreate FlowLog's planner/compiler piecemeal.
 
@@ -42,6 +45,7 @@
 - Datatoad's WCOJ kernel assumes trie/columnar fact containers and term-order-aware execution; integrating it with DD arrangements or egglog relation storage may require substantial data-structure translation and an egglog-specific index layout.
 - WCOJ helps multiway joins, but many egglog costs may come from equality/rewrite churn, canonicalization, and maintaining derived relations across rebuilds rather than join asymptotics alone.
 - Incremental WCOJ inside recursive DD feedback needs careful timestamp/progress semantics; `dataflow-join` handles indexed stream extenders, but not Datalog stratification, egglog saturation control, or rebuild invalidation.
+- Small-iteration scheduling can conflict with egglog custom schedulers and side-effectful actions, because those may require all matches for a logical step before choosing which actions fire.
 
 ## Promising Connections
 - Reuse FlowLog's conceptual pipeline: parse/rules -> catalog/IR -> optimizer/planner -> DD compiler, with egglog-specific operators for e-class canonicalization and rebuild-aware relation maintenance.
@@ -56,6 +60,7 @@
 - Inspect how egglog rebuild/canonicalization updates would appear as DD diffs: relation updates only, key rewrites, or full retractions/reinsertions.
 - Prototype a minimal FlowLog-like relational IR for egglog atoms and check whether every needed rule side condition can become map/filter/join/antijoin/WCOJ.
 - Determine whether DD arrangements can serve as the backing indexes for WCOJ proposals, or whether trie/COLT-style indexes must be maintained separately.
+- Compare a bulk ruleset run against a small-iteration DD physical schedule on the same egglog rule cluster, measuring throughput, progress traffic, retained trace state, and final e-graph equivalence.
 
 ## Confidence
 - Medium: local code and PDF extraction strongly support the architectural comparison, but no egglog workload was measured against these join strategies in this pass.

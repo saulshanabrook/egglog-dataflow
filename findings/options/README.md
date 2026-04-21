@@ -18,6 +18,12 @@ option or sub-option.
 | 3. FlowLog/datatoad-like middle layer | Could become a coherent long-term relational planner with DD execution and WCOJ-style join kernels. | Requires a substantial new planner, index universe, recursive-control model, egglog-specific adapter, and rebuild/equality invalidation model. | [Option 3](option-3-flowlog-datatoad-middle-layer.md) |
 | 4. No DD backend, borrow ideas | Preserves existing semantics while incrementally adopting WCOJ planning, provider interfaces, columnar storage, profiling, or cleaner rule IR boundaries. | Does not answer the shared-substrate motivation unless provider-style boundaries isolate reusable pieces from native-only behavior. | [Option 4](option-4-no-dd-backend-borrow-ideas.md) |
 
+Option 3 also has a scheduling refinement:
+[small-iteration scheduling](option-3-small-iteration-scheduling-refinement.md)
+explores whether one logical egglog ruleset could lower into many smaller DD
+iterations that overlap in parallel, rather than preserving egglog's current
+bulk physical iteration shape.
+
 ## Tradeoff Summary
 
 - Option 1 is the smallest migration surface, but it may force egglog and DD to

@@ -56,7 +56,10 @@ Current option tradeoff map:
   Python/container/scheduler frontend surface.
 - Option 3 has broad long-term planning upside, but requires a large new
   middle layer, egglog-specific adapter, index layout, and invalidation model
-  before the equality/rebuild boundary is proven.
+  before the equality/rebuild boundary is proven. A new
+  [small-iteration scheduling refinement](options/option-3-small-iteration-scheduling-refinement.md)
+  asks whether that middle layer should also replace egglog's bulk physical
+  ruleset iteration with many smaller DD iterations.
 - Option 4 avoids backend migration risk for existing semantics, but gives less
   maintenance leverage from a shared substrate unless provider-style relation
   boundaries isolate reusable pieces.

@@ -33,6 +33,11 @@ relations might use DD/FlowLog while equality, containers, and rebuild-sensitive
 relations stay behind specialized providers. This is tracked as a first-class
 uncertainty in [findings/synthesis.md](findings/synthesis.md).
 
+An Option 3 scheduling refinement asks whether one logical ruleset could lower
+into many smaller DD iterations, rather than preserving egglog's current bulk
+physical iteration shape. See
+[small-iteration scheduling](findings/options/option-3-small-iteration-scheduling-refinement.md).
+
 ## How To Pick This Up
 
 - Read [findings/synthesis.md](findings/synthesis.md) for the consolidated evidence and
