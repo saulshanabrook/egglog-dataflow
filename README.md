@@ -1,23 +1,74 @@
-# Exploration of Egglog on top of Differential Dataflow
+# Exploring Egglog On Differential Dataflow
 
-This repository is a source bundle for exploring whether some or all of
-`egglog` can be built on top of Timely / Differential Dataflow.
+This repository is a source bundle for deciding whether some or all of
+`egglog` should be built on top of Timely / Differential Dataflow, or on
+another library that itself builds on that ecosystem.
 
 It is not a single buildable workspace. The top-level tree collects papers,
 discussion transcripts, pinned source checkouts, and small prototype code that
-are useful for answering design questions before implementation work starts.
+are useful for weighing the case before implementation work starts.
 
-## Main Scientific Question
+## Motivation
 
-Can `egglog`'s current evaluation model be mapped onto Differential Dataflow in
-a way that preserves the semantics, performance-critical invariants, and
-user-facing abstractions that matter for real egglog workloads?
+The motivation is social and operational as much as technical.
+
+If `egglog` were built on Differential Dataflow, FlowLog, datatoad, or another
+library in that orbit, the projects would be linked. Performance improvements
+made for egglog could potentially land in the shared dataflow/database substrate,
+and improvements made there could benefit egglog in return. That matters because
+egglog is already a complicated database-like system: it has relational rule
+evaluation, indexes, equality maintenance, rebuilding, custom sorts,
+containers, scheduling, analyses, and extraction.
+
+Moving a large piece of that complexity onto a third-party engine could make the
+system more legitimate and maintainable. It would put more of the hard database
+engineering behind an independently reviewed and maintained project, rather than
+leaving egglog to own every performance and incrementality concern itself.
+Frank McSherry and the Differential Dataflow ecosystem are especially credible
+for this role: the local discussions and source bundle point to performant
+systems work, and the working assumption is that engine-level issues with clear
+reproductions would receive serious attention.
+
+This does not mean such a move is wise. It means the possible upside is large
+enough to justify a focused investigation before committing implementation time.
+
+## Project Goal
+
+The goal of this project is to look for the best reasons this would not work and
+should not be attempted.
+
+The desirable outcome, if the idea survives scrutiny, would be a path where
+egglog's user-facing syntax changes minimally. Changes to internals, extension
+interfaces, custom containers, or backend APIs may be acceptable if they buy a
+substantial maintenance and performance story. But the investigation should not
+assume that tradeoff is acceptable. It should weigh the evidence against the
+status quo before anyone spends the time to build a serious implementation and
+benchmark it against the current engine.
+
+The practical decision question is:
+
+Can egglog be moved onto Differential Dataflow or a nearby dataflow/database
+library in a way that has a realistic chance of preserving egglog's semantics,
+performance-critical invariants, extensibility, and mostly-stable syntax?
 
 ## Scientific Questions
 
-These are the high-level questions to keep updating as the research proceeds.
-The goal is to refine these questions and add evidence to the conclusions
-section, not to lock in a specific implementation trail yet.
+These questions are a falsification checklist. The goal is to refine them and
+add evidence to the conclusions section, not to lock in a specific
+implementation trail yet.
+
+### Social And Maintenance Fit
+
+- Would moving onto DD or a related engine actually reduce egglog maintenance
+  burden, or would it add a second complex system that egglog maintainers must
+  understand deeply?
+- Which pieces of current egglog complexity would become someone else's
+  maintained abstraction, and which pieces would still need egglog-specific
+  custom machinery?
+- Are likely engine fixes general enough to upstream into DD, FlowLog, datatoad,
+  Timely, or related libraries, or would egglog end up carrying a private fork?
+- Can the migration preserve enough of egglog's syntax and user-facing model to
+  count as an implementation change rather than a new system?
 
 ### Equality Maintenance And Rebuilding
 
@@ -75,11 +126,25 @@ section, not to lock in a specific implementation trail yet.
 - What measurements are needed before choosing a backend boundary: runtime,
   retained state, iterations, relation sizes, rebuild work, and extracted result
   quality?
+- What evidence would be strong enough to stop the project before a backend
+  implementation attempt?
 
 ## Current Conclusions
 
 These are working conclusions from the current source bundle. They should be
 updated as the questions above get sharper.
+
+### Project Orientation
+
+- The strongest pro-DD argument is not only "DD might be fast". It is that DD
+  and nearby projects could provide a maintained database substrate for a large
+  part of egglog's current complexity.
+- The research posture should be adversarial. Before building a serious backend,
+  the project should identify semantic, performance, extension, syntax, or
+  maintenance reasons that would make the attempt unlikely to succeed.
+- Minimal syntax disruption is an important constraint. Backend and extension
+  changes may be acceptable, but a design that forces users to write a different
+  language has much less value as an egglog implementation strategy.
 
 ### Equality Maintenance
 
