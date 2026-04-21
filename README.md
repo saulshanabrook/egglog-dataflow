@@ -7,31 +7,31 @@ maintenance work with a serious dataflow/database ecosystem; the risk is that
 egglog's equality maintenance, rebuilding, containers, schedules, and frontend
 semantics are too specialized for that move to pay off.
 
-## Current Conclusion
+## Current State
 
-- Do not attempt a full egglog-on-DD rewrite yet.
-- First experiment: native equality plus DD/FlowLog rule evaluation.
-- Keep equality maintenance, rebuilding, containers, analyses, extraction, and
-  user-facing syntax native for now.
-- Treat DD/FlowLog/datatoad as plausible substrates for maintained relational
-  matching, arrangements, and join planning, not yet as replacements for the
-  whole egglog backend.
+No backend path has been selected. The current evidence is useful for comparing
+the long-term costs and benefits of each option, but it still leaves open
+blockers around equality maintenance, rebuilding, containers, schedules,
+extension APIs, and frontend compatibility. The next useful work is to gather
+targeted evidence for whichever option looks most important to evaluate.
 
 ## Backend Options
 
-| Option | Status | Recommendation | Link |
+| Option | Potential Benefits | Long-Term Costs / Blockers | Link |
 | --- | --- | --- | --- |
-| Native equality + DD/FlowLog rule evaluation | Most plausible first experiment | Continue | [Option 1](findings/options/option-1-native-equality-dd-rule-eval.md) |
-| FlowLog/datatoad-like middle layer | Coherent long-term architecture | Defer | [Option 3](findings/options/option-3-flowlog-datatoad-middle-layer.md) |
-| Proof/term encoding to DD | Useful research/specification path | Defer | [Option 2](findings/options/option-2-proof-term-encoding-dd.md) |
-| No DD backend, borrow ideas | Fallback/native improvement path | Continue in parallel | [Option 4](findings/options/option-4-no-dd-backend-borrow-ideas.md) |
+| Native equality + DD/FlowLog rule evaluation | Tests a shared relational substrate while preserving most existing egglog semantics. DD/FlowLog could own maintained rule indexes and incremental body matching. | Requires a precise delta boundary for canonical ids, rebuild invalidations, same-id container refresh, match deduplication, and action handoff. It may duplicate indexed state across egglog and the substrate. | [Option 1](findings/options/option-1-native-equality-dd-rule-eval.md) |
+| FlowLog/datatoad-like middle layer | Could support a long-term relational planning layer with DD execution and WCOJ-style joins. | Requires a substantial new planner, index story, recursive-control model, and egglog-specific equality/rebuild operators before proving that the substrate boundary pays off. | [Option 3](findings/options/option-3-flowlog-datatoad-middle-layer.md) |
+| Proof/term encoding to DD | Gives a concrete relational specification for equality, UF/view/rebuild state, and proof-oriented experiments. | Current evidence says it is high-overhead, incomplete for current egglog features, and incompatible with container/presort semantics without a separate native path. | [Option 2](findings/options/option-2-proof-term-encoding-dd.md) |
+| No DD backend, borrow ideas | Keeps frontend/container semantics stable while adopting WCOJ planning, provider interfaces, columnar storage, profiling, or clearer rule IR boundaries incrementally. | Gives up much of the shared-substrate maintenance story and leaves egglog owning the hard database/runtime complexity. | [Option 4](findings/options/option-4-no-dd-backend-borrow-ideas.md) |
 
 ## How To Pick This Up
 
-- Read [findings/synthesis.md](findings/synthesis.md) for the current conclusion and stop/continue
-  criteria.
-- Read [findings/options/README.md](findings/options/README.md) for the ranked option summary.
-- If implementing next, start from Option 1's evidence-to-gather list.
+- Read [findings/synthesis.md](findings/synthesis.md) for the consolidated evidence and
+  continue/stop criteria.
+- Read [findings/options/README.md](findings/options/README.md) for the detailed option
+  tradeoffs.
+- Pick an option based on the uncertainty you want to reduce, then use that
+  option note's evidence-to-gather list before implementation.
 - If evaluating whether to stop, read the "Evidence to stop" section in
   [findings/synthesis.md](findings/synthesis.md).
 - If you need the detailed research framing, source inventory, or reading order,

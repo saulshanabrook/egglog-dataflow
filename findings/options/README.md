@@ -1,27 +1,24 @@
 # Backend Boundary Option Findings
 
-This directory stores the second-pass viability analysis for the four backend
+This directory stores the second-pass tradeoff analysis for the four backend
 boundary options identified in `../synthesis.md`.
 
-## Option Status
+## Option Tradeoffs
 
-| Option | Note | Viability | Recommendation | Status |
-| --- | --- | --- | --- | --- |
-| 1. Native equality + DD/FlowLog rule evaluation | `option-1-native-equality-dd-rule-eval.md` | Medium | Continue as first hybrid prototype | Complete |
-| 2. Proof/term encoding to DD | `option-2-proof-term-encoding-dd.md` | Low / Medium | Defer as main lowering; keep as specification/prototype oracle | Complete |
-| 3. FlowLog/datatoad-like middle layer | `option-3-flowlog-datatoad-middle-layer.md` | Medium | Defer as long-term architecture | Complete |
-| 4. No DD backend, borrow ideas | `option-4-no-dd-backend-borrow-ideas.md` | High as fallback | Continue as low-risk native improvement track | Complete |
+| Option | Main Benefit | Long-Term Cost / Blocker | Note |
+| --- | --- | --- | --- |
+| 1. Native equality + DD/FlowLog rule evaluation | Tests maintained relational matching and indexing while keeping equality/rebuild/container behavior native. | Needs a precise delta interface for canonical-id changes, rebuild invalidations, container refresh, match deduplication, and action handoff. | [Option 1](option-1-native-equality-dd-rule-eval.md) |
+| 2. Proof/term encoding to DD | Provides a concrete relational specification for equality, UF/view/rebuild tables, and proof-oriented experiments. | Current encoding is slow, incomplete for current egglog features, and incompatible with container/presort semantics without a native side channel. | [Option 2](option-2-proof-term-encoding-dd.md) |
+| 3. FlowLog/datatoad-like middle layer | Could become a coherent long-term relational planner with DD execution and WCOJ-style join kernels. | Requires a substantial new planner, index universe, recursive-control model, and egglog-specific rebuild/equality operators. | [Option 3](option-3-flowlog-datatoad-middle-layer.md) |
+| 4. No DD backend, borrow ideas | Preserves existing semantics while incrementally adopting WCOJ planning, provider interfaces, columnar storage, profiling, or cleaner rule IR boundaries. | Does not answer the shared-substrate motivation and leaves most database/runtime complexity inside egglog. | [Option 4](option-4-no-dd-backend-borrow-ideas.md) |
 
-## Relative Ranking
+## Tradeoff Summary
 
-1. **Likely first experiment:** Option 1, because it tests DD/FlowLog where the
-   fit is strongest while keeping equality/rebuild/container machinery native.
-2. **Promising but deferred:** Option 3, because a FlowLog/datatoad-like middle
-   layer is coherent but too large before the smaller data-exchange boundary is
-   proven.
-3. **High-risk research path:** Option 2, because proof/term encoding is a
-   useful relational specification but incomplete and likely too expensive as a
-   production lowering.
-4. **Fallback/non-migration path:** Option 4, because borrowing WCOJ, provider,
-   columnar, and profiling ideas is the safest path if backend migration does
-   not justify itself.
+- Option 1 is the smallest migration surface, but it may force egglog and DD to
+  maintain overlapping indexes and carefully synchronized deltas.
+- Option 2 is a clear specification path, but it currently looks too
+  expensive and feature-incomplete for production lowering.
+- Option 3 has broad architecture upside, but it is a large system design
+  project rather than a small backend substitution.
+- Option 4 avoids migration risk, but it gives up most of the social and
+  maintenance benefit of sharing a substrate with DD/FlowLog/datatoad.

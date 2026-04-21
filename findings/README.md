@@ -11,8 +11,8 @@ index for deeper conclusions, methodology, option analysis, and source notes.
 
 | Path | Purpose |
 | --- | --- |
-| [synthesis.md](synthesis.md) | Current consolidated conclusion, continue/stop criteria, and next experiments. |
-| [options/README.md](options/README.md) | Ranked analysis of the four backend boundary options. |
+| [synthesis.md](synthesis.md) | Consolidated evidence, continue/stop criteria, and possible next evidence-gathering work. |
+| [options/README.md](options/README.md) | Tradeoff analysis of the four backend boundary options. |
 | [methodology.md](methodology.md) | Detailed research framing, scientific questions, source inventory, reading order, and design risks. |
 | [source-notes/](source-notes/) | First-pass evidence notes by source cluster. |
 
@@ -29,24 +29,30 @@ index for deeper conclusions, methodology, option analysis, and source notes.
 
 ## Synthesis
 
-- [synthesis.md](synthesis.md): consolidated evidence, provisional conclusion, and next
-  experiments.
+- [synthesis.md](synthesis.md): consolidated evidence, provisional assessment, and possible
+  evidence-gathering work.
 
-Current provisional conclusion: do not attempt a full egglog-on-DD rewrite yet.
-Continue with a narrow prototype centered on rule evaluation while keeping
-equality maintenance, rebuilding, containers, analyses, and extraction native.
+Current provisional assessment: no backend path has been selected. The evidence
+is strongest as a map of tradeoffs: DD/FlowLog/datatoad may help with relational
+matching and planning, while equality maintenance, rebuilding, containers,
+schedules, extension APIs, and frontend compatibility remain the main blockers
+to evaluate before committing to any implementation path.
 
 ## Option Viability Pass
 
-- [options/README.md](options/README.md): second-pass analysis of the four backend boundary
-  options from `synthesis.md`.
+- [options/README.md](options/README.md): second-pass tradeoff analysis of the four
+  backend boundary options from `synthesis.md`.
 
-Current option ranking:
+Current option tradeoff map:
 
-1. Option 1: native equality plus DD/FlowLog rule evaluation.
-2. Option 3: FlowLog/datatoad-like middle layer.
-3. Option 2: proof/term encoding to DD.
-4. Option 4: no DD backend, borrow ideas as fallback.
+- Option 1 lowers syntax and frontend disruption by keeping equality/rebuild
+  native, but depends on a difficult delta contract between egglog and DD.
+- Option 2 gives a clear relational equality specification, but current
+  proof/term encoding evidence raises overhead and container-support blockers.
+- Option 3 has broad long-term planning upside, but requires a large new
+  middle layer before the equality/rebuild boundary is proven.
+- Option 4 avoids backend migration risk for existing semantics, but gives less
+  maintenance leverage from a shared substrate.
 
 ## Coverage
 
