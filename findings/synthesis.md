@@ -12,13 +12,18 @@ losing egglog's core semantics.
 Evidence to continue:
 
 - A native-equality plus DD/FlowLog-style rule-evaluation prototype can preserve
-  rebuild semantics, schedules, and containers while moving enough relational
-  matching/indexing work out of egglog to justify the dependency.
-- DD arrangements or a FlowLog/datatoad-like planner materially improve or
-  simplify e-matching-heavy workloads without requiring a private fork of the
-  substrate.
-- Equality updates can be batched into DD at a coarse enough timestamp granularity
-  that trace/progress costs stay bounded on rebuild-heavy cases.
+  rebuild semantics, custom scheduler behavior, and containers while moving
+  enough relational matching/indexing work out of egglog to justify the
+  dependency.
+- DD arrangements or a FlowLog/datatoad-inspired planner materially improve or
+  simplify e-matching-heavy workloads without requiring a private fork or an
+  egglog-specific second database engine.
+- Measurements show that timestamp granularity, trace compaction, rebuild
+  invalidations, and same-id dirty refresh events stay bounded on rebuild-heavy
+  cases.
+- A provider-style boundary can separate ordinary rule relations from
+  equality/container/rebuild-sensitive relations without erasing the maintenance
+  benefit of the shared substrate.
 
 Evidence to stop:
 
@@ -28,15 +33,19 @@ Evidence to stop:
 - Container rebuild, higher-order container functions, custom schedulers, or
   Python-facing APIs require enough bespoke code that the DD layer no longer
   provides meaningful maintenance leverage.
+- Preserving custom scheduler semantics requires full match materialization,
+  subset selection, and delayed action firing in a way that defeats the proposed
+  incremental rule-evaluation boundary.
 - The only viable path changes egglog's user-facing language enough to become a
   different system rather than a backend/substrate replacement.
 
 ## Arguments For
 
-- The social and maintenance motivation is real: the conversations show active
-  interest from the DD ecosystem, especially around e-graph-shaped workloads,
-  and the strongest benefit would be sharing hard database engineering rather
-  than only chasing speed (`source-notes/conversations-social.md`).
+- The social and maintenance motivation is plausible but unproven: the
+  conversations show interest from the DD ecosystem, especially around
+  e-graph-shaped workloads, and the hoped-for benefit would be sharing hard
+  database engineering rather than only chasing speed
+  (`source-notes/conversations-social.md`).
 - Egglog already has a relational rule shape. Core rules lower to conjunctive
   query bodies plus actions, and the current backend delegates rule execution to
   a relation layer, making rule matching a plausible substrate boundary
@@ -44,16 +53,18 @@ Evidence to stop:
 - DD/Timely directly supports maintained joins, arrangements, reductions,
   compaction, and nested iteration. Those match e-node indexes, parent indexes,
   seminaive matching, and some fixed-point structure (`source-notes/differential-timely.md`).
-- FlowLog is the closest architecture model for "Datalog on DD": it separates
-  rule planning, recursive control, optimization, and DD lowering. That is a
-  better fit than treating raw DD collections as the frontend abstraction
+- FlowLog is the closest architecture reference for "Datalog on DD": it
+  separates rule planning, recursive control, optimization, and DD lowering. It
+  is a planning shape, not a drop-in egglog backend
   (`source-notes/datalog-wcoj-planning.md`).
-- Datatoad, Free Join, and `dataflow-join` suggest a richer join-planning path
-  for cyclic or high-arity e-matching queries than source-order binary joins
+- Datatoad, Free Join, and `dataflow-join` suggest richer join-kernel ideas for
+  cyclic or high-arity e-matching queries than source-order binary joins, but
+  they need an egglog-specific adapter, index layout, and invalidation model
   (`source-notes/datalog-wcoj-planning.md`).
 - Ascent BYODS and `columnar` show that custom relation/storage providers are a
-  legitimate design pattern for logic systems, which could preserve specialized
-  equality/container behavior while still sharing a rule substrate
+  legitimate design pattern for logic systems. Provider-style boundaries are a
+  cross-cutting architecture axis for preserving specialized equality/container
+  behavior while still sharing some rule substrate
   (`source-notes/extension-models.md`).
 
 ## Arguments Against
@@ -77,6 +88,10 @@ Evidence to stop:
   custom costs, schedulers, extraction, preserved Python calls, and
   `egglog-experimental` extensions all constrain the backend boundary
   (`source-notes/containers-frontends.md`).
+- Proof/term encoding is only a partial validation oracle. It names useful
+  equality/rebuild relations, but it cannot validate the full Python,
+  container, scheduler, presort, primitive, and custom frontend surface
+  (`source-notes/egglog-core-proof.md`, `source-notes/containers-frontends.md`).
 
 ## Backend Boundary Options
 
@@ -88,29 +103,31 @@ Evidence to stop:
    - Potential benefit: tests shared substrate value at the rule-matching layer
      without immediately moving the hardest equality and container semantics.
    - Main blocker: the egglog/DD boundary would need exact handling for
-     canonical-id changes, rebuild invalidations, dirty container refresh,
-     duplicate/stale matches, and action handoff
+     canonical-id changes, explicit rebuild-invalidation and same-id dirty
+     events, full-match/delayed-fire scheduler semantics, duplicate/stale
+     matches, and action handoff
      (`options/option-1-native-equality-dd-rule-eval.md`).
 
 2. **Proof/term encoding to DD**
    - Use egglog's proof/term encoding as a relational specification of equality
      maintenance, then lower those generated relations to DD.
    - Potential benefit: gives a concrete relational account of UF/view/rebuild
-     state and could serve as a correctness oracle for other designs.
+     state and could serve as a partial correctness oracle for other designs.
    - Main blocker: the current path is much slower, rejects custom
-     containers/presorts, and shifts equality into many generated tables
+     containers/presorts, cannot validate the full Python/container/scheduler
+     surface, and shifts equality into many generated tables
      (`options/option-2-proof-term-encoding-dd.md`).
 
 3. **FlowLog/datatoad-like middle layer**
    - Build or adapt an intermediate relational planner with DD execution,
      datatoad/WCOJ operators for selected joins, and egglog-specific operators
      for rebuild/equality deltas.
-   - Potential benefit: could support a long-term relational architecture if
-     egglog needs planning, recursive control, and WCOJ kernels between the
-     frontend and runtime.
+   - Potential benefit: could support a long-term relational architecture using
+     FlowLog-like planner structure and datatoad/dataflow-join-style join
+     kernels between the frontend and runtime.
    - Main blocker: it requires a substantial new planner, index model, recursive
-     control story, and egglog-specific equality/rebuild operators before the
-     smaller substrate boundary is proven
+     control story, egglog-specific adapter, and equality/rebuild invalidation
+     model before the smaller substrate boundary is proven
      (`options/option-3-flowlog-datatoad-middle-layer.md`).
 
 4. **No DD backend**
@@ -121,48 +138,47 @@ Evidence to stop:
      extension semantics while still importing concrete database-engineering
      ideas.
    - Main blocker: it gives less shared-substrate maintenance leverage and
-     leaves egglog owning most of the hard runtime complexity
+     leaves egglog owning most of the hard runtime complexity. Its
+     provider-style relation boundary may be important enough to compare as a
+     separate sub-option
      (`options/option-4-no-dd-backend-borrow-ideas.md`).
+
+## Cross-Cutting Provider Boundary
+
+Provider-style relation boundaries are not just an implementation detail of
+Option 4. They cut across the DD and non-DD designs: ordinary rule relations
+could be DD/FlowLog-backed while equality, containers, rebuild-sensitive tables,
+or columnar storage use specialized providers. The upside is preserving
+egglog-specific semantics without forcing all equality maintenance into ordinary
+relations. The cost is a new provider ABI that may recreate much of the current
+backend complexity and reduce the generic value DD can provide
+(`source-notes/extension-models.md`).
+
+This axis needs its own evidence before it becomes a separate option: a minimal
+provider-boundary sketch with one ordinary relation, one equality/rebuild-aware
+provider, and one container/index provider, compared against both the native
+backend and a DD-backed rule-evaluation prototype.
 
 ## Current Assessment
 
 No backend path is selected yet. The evidence is better read as a tradeoff map
 than as a prescriptive implementation queue.
 
-The source evidence supports DD/FlowLog/datatoad as plausible shared substrates
-for maintained relational matching, arrangements, and maybe WCOJ-style planning.
-It does not yet show that all equality maintenance, rebuilding, containers, or
-scheduling can move into that substrate without losing core egglog semantics or
-recreating the current backend complexity at a different layer.
+The source evidence supports DD/FlowLog/datatoad as plausible references or
+substrates for maintained relational matching, arrangements, and maybe
+WCOJ-style planning. It does not yet show that all equality maintenance,
+rebuilding, containers, scheduling, or provider-specific behavior can move into
+that substrate without losing core egglog semantics or recreating the current
+backend complexity at a different layer.
 
 The central question for any option is whether it can move enough real
 database/runtime responsibility out of egglog to justify its long-term cost. If
 the substrate only handles a small amount of ordinary joining while egglog still
 owns equality, rebuild, containers, scheduling, custom providers, and most
 indexing, the maintenance argument becomes weak even if individual prototypes
-work.
-
-## Adversarial Review Update
-
-A pre-sharing adversarial review found no P0/P1 contradictions in this synthesis
-or the option framing (`adversarial-review.md`). The accepted corrections are
-mostly caveats about evidentiary weight:
-
-- The social and maintenance payoff should be treated as a hypothesis from the
-  conversations, not a validated outcome (`adversarial-notes/collaborator-readiness.md`).
-- FlowLog, datatoad, and `dataflow-join` are planner shapes and join-kernel
-  references, not drop-in reusable engines for egglog
-  (`adversarial-notes/dd-flowlog-substrate.md`).
-- Timestamp granularity, trace compaction, rebuild invalidation, and same-id
-  dirty refresh remain empirical questions; ordinary tuple deletes are not a
-  complete description of rebuild-triggered invalidation
-  (`adversarial-notes/dd-flowlog-substrate.md`).
-- Proof/term encoding is useful as a partial relational specification, but it
-  cannot validate the full Python/container/scheduler surface
-  (`adversarial-notes/egglog-semantics.md`).
-- Provider-style relation boundaries are a cross-cutting design axis. They may
-  deserve a separate option or sub-option once there is a concrete comparison
-  against the DD/native split (`adversarial-notes/option-completeness.md`).
+work. The social maintenance payoff should also remain a hypothesis until a
+prototype produces issues, fixes, or reusable abstractions that upstream
+projects actually want to share.
 
 ## Option Tradeoff Update
 
@@ -173,18 +189,20 @@ blocker rather than by a preferred order.
   a limited migration surface that tests DD/FlowLog on maintained rule indexes
   and incremental body matching while keeping current equality/rebuild/container
   behavior native. Main blocker before trying: define and measure the delta
-  contract for canonical ids, rebuild invalidation, container refresh, and match
-  handoff (`options/option-1-native-equality-dd-rule-eval.md`).
+  contract for canonical ids, rebuild invalidation, same-id dirty refresh,
+  scheduler match selection, and action handoff
+  (`options/option-1-native-equality-dd-rule-eval.md`).
 - **Option 2: proof/term encoding to DD.** Long-term benefit: a concrete
   relational specification for equality maintenance and proof experiments. Main
   blocker before trying: show that generated UF/view/rebuild tables can be made
-  much cheaper and that containers/presorts have a credible encoding or native
-  side channel (`options/option-2-proof-term-encoding-dd.md`).
+  much cheaper and accept that containers, schedulers, presorts, and Python
+  frontends still need separate validation paths
+  (`options/option-2-proof-term-encoding-dd.md`).
 - **Option 3: FlowLog/datatoad-like middle layer.** Long-term benefit: a richer
-  planner architecture with DD execution, recursive control, and WCOJ kernels
-  available behind egglog's frontend. Main blocker before trying: avoid building
-  a second full database engine before proving which egglog relations and
-  indexes actually belong outside the native backend
+  planner architecture inspired by DD execution, recursive control, and WCOJ
+  kernels behind egglog's frontend. Main blocker before trying: avoid building a
+  second full database engine before proving which egglog relations, indexes,
+  providers, and invalidation events actually belong outside the native backend
   (`options/option-3-flowlog-datatoad-middle-layer.md`).
 - **Option 4: no DD backend, borrow ideas.** Long-term benefit: lower migration
   risk for existing semantics, with incremental adoption of WCOJ, provider,
@@ -205,6 +223,9 @@ Evidence that would clarify the choice:
 - Option 4 needs evidence that borrowed planning/profiling/provider ideas can
   address important egglog workloads well enough that the shared-substrate
   migration is not worth the cost.
+- The provider-boundary axis needs a concrete comparison showing whether custom
+  equality/container/rebuild providers preserve semantics without collapsing
+  back into a full native backend.
 
 ## Possible Evidence-Gathering Work
 
@@ -213,7 +234,8 @@ Evidence that would clarify the choice:
   records emitted, retained state, and representative churn.
 - Build one native-equality plus DD rule-evaluation prototype for a small
   e-matching rule. Keep rebuild and union-find native; feed DD batched relation
-  deltas and compare against current `core-relations`.
+  deltas and compare against current `core-relations`, including a case that
+  requires same-id dirty refresh or explicit rebuild invalidation.
 - Reproduce the documented container witness
   `2 + a + b + b + 3` across binary A/C rules, multiset containers with an
   index, and higher-order multiset functions. Measure whether a DD-backed index
@@ -224,3 +246,5 @@ Evidence that would clarify the choice:
 - Sketch the minimum custom-provider interface required for equality,
   containers, and columnar relation storage, using Ascent BYODS as the
   comparison point.
+- Trace one custom scheduler run to measure how many matches are materialized,
+  retained, filtered, and delayed before action execution.

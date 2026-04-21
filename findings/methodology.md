@@ -18,13 +18,14 @@ evaluation, indexes, equality maintenance, rebuilding, custom sorts,
 containers, scheduling, analyses, and extraction.
 
 Moving a large piece of that complexity onto a third-party engine could make the
-system more legitimate and maintainable. It would put more of the hard database
-engineering behind an independently reviewed and maintained project, rather than
-leaving egglog to own every performance and incrementality concern itself.
-Frank McSherry and the Differential Dataflow ecosystem are especially credible
-for this role: the local discussions and source bundle point to performant
-systems work, and the working assumption is that engine-level issues with clear
-reproductions would receive serious attention.
+system more maintainable if the collaboration and abstraction boundary actually
+materialize. It might put more of the hard database engineering behind an
+independently reviewed and maintained project, rather than leaving egglog to own
+every performance and incrementality concern itself. Frank McSherry and the
+Differential Dataflow ecosystem are credible collaborators for this hypothesis:
+the local discussions and source bundle point to performant systems work and
+interest in sharp reproductions. They do not by themselves prove sustained
+upstream maintenance transfer or future responsiveness.
 
 This does not mean such a move is wise. It means the possible upside is large
 enough to justify a focused investigation before committing implementation time.
@@ -136,7 +137,7 @@ passes. For the current consolidated conclusion, read `synthesis.md`.
 - The strongest pro-DD argument is not only "DD might be fast". It is that DD
   and nearby projects could provide a maintained database substrate for a large
   part of egglog's current complexity.
-- The research posture should be adversarial. Before building a serious backend,
+- The research posture should be skeptical. Before building a serious backend,
   the project should identify semantic, performance, extension, syntax, or
   maintenance reasons that would make the attempt unlikely to succeed.
 - Minimal syntax disruption is an important constraint. Backend and extension

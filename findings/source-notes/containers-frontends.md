@@ -22,18 +22,19 @@
 - The container blog's preferred path is block-wise higher-order processing: map constants out of a multiset, subtract reconstructed constants, fold all constants, and rewrite once, avoiding pairwise index matches (`repos/egglog-python/docs/explanation/2026_02_containers.md:267`, `:289`, `:318`).
 - Scheduling must survive as a frontend feature: users rely on rulesets, `run`, `saturate`, `seq`, `repeat`, `run(..., scheduler=...)`, and scheduler scoping to separate analysis from explosive optimization rules (`repos/egglog-python/docs/reference/egglog-translation.md:371`, `:398`, `:475`; `repos/egglog-tutorial/04-scheduling.egg:121`, `:147`, `:203`).
 - Extension APIs are broad: `egglog-experimental` layers parser macros (`for`, `with-ruleset`), rational primitives, dynamic `set-cost`, `get-size!`, `unstable-fresh!`, custom `run-schedule`, and `multi-extract` onto a base egraph (`repos/egglog-experimental/src/lib.rs:8`, `:45`, `:77`).
-- Custom scheduler extension requires rule-level match filtering and scheduler state. `add_scheduler_builder` registers builders, `run-with` calls `step_rules_with_scheduler`, and `BackOffScheduler.filter_matches` can skip, ban, or choose matches based on match counts (`repos/egglog-experimental/src/scheduling.rs:33`, `:94`, `:133`, `:302`, `:359`).
+- Custom scheduler extension requires more than match-count visibility. The current paths can materialize all matches, let the scheduler choose a subset, and delay action firing until after that choice, so `run-with` and backoff behavior depend on full match materialization plus selective admission (`repos/egglog/src/scheduler.rs`; `repos/egglog-experimental/src/scheduling.rs:33`, `:94`, `:133`, `:302`, `:359`).
 - The tutorial's database story maps well to DD vocabulary: relations, functions with merge expressions, constructors as function tables, and functional dependencies are explicit user-visible semantics (`repos/egglog-tutorial/02-datalog.egg:87`, `:97`, `:228`, `:238`).
 
 ## Relevance To The Main Objective
 - Moving onto Differential Dataflow looks plausible where egglog already presents itself as tables, joins, functions, merges, and schedules, but the substrate must preserve e-class congruence, deferred rebuild, and container normalization as observable behavior.
 - DD could help with incremental relation maintenance and indexed matching, but the current frontend assumes imperative egraph actions, extraction/cost hooks, stack-like `push`/`pop`, and scheduler-controlled match admission, so a pure relational core is not enough.
+- DD-backed rule evaluation still needs an evidence-backed story for custom schedulers: the engine must preserve full match materialization, subset selection, and delayed action firing, not just expose match counts.
 - Containers are a major reason to change substrate only if DD can make index/fold/map workloads cheaper without losing the opaque primitive plus rebuild abstraction that Python users already exercise.
 
 ## Likely Blockers
 - Container rebuild is not just a function call; it must run at the right point after unions so container equality and downstream matches see canonical e-class ids.
 - Higher-order container operations depend on `UnstableFn`, partial application, lambdas converted into default rewrites, and generic-ish typing; the blog explicitly calls primitive function composition and generic support current weak spots.
-- Backoff and custom schedulers need visibility into per-rule match counts and the ability to skip or delay matches, which may cut against DD's normal fixed-point execution model.
+- Backoff and custom schedulers need visibility into per-rule match counts and the ability to skip or delay matches, which is a blocker/evidence gap for DD-backed rule evaluation if full-match materialization and delayed firing are not preserved.
 - `push`/`pop`, deletion/subsumption, dynamic cost tables, Python preserved methods, `PyObject` calls, and extraction with custom Python cost models are side-effectful or host-integrated APIs that need an adapter layer.
 - Index-based container matching can recreate blow-up; a DD port that only materializes more indexes may miss the blog's higher-order/block-wise lesson.
 

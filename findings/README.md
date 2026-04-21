@@ -12,7 +12,6 @@ index for deeper conclusions, methodology, option analysis, and source notes.
 | Path | Purpose |
 | --- | --- |
 | [synthesis.md](synthesis.md) | Consolidated evidence, continue/stop criteria, and possible next evidence-gathering work. |
-| [adversarial-review.md](adversarial-review.md) | Pre-sharing adversarial review of unsupported claims, missing blockers, and evidence gaps. |
 | [options/README.md](options/README.md) | Tradeoff analysis of the four backend boundary options. |
 | [methodology.md](methodology.md) | Detailed research framing, scientific questions, source inventory, reading order, and design risks. |
 | [source-notes/](source-notes/) | First-pass evidence notes by source cluster. |
@@ -37,17 +36,10 @@ Current provisional assessment: no backend path has been selected. The evidence
 is strongest as a map of tradeoffs: DD/FlowLog/datatoad may help with relational
 matching and planning, while equality maintenance, rebuilding, containers,
 schedules, extension APIs, and frontend compatibility remain the main blockers
-to evaluate before committing to any implementation path.
-
-## Adversarial Review
-
-- [adversarial-review.md](adversarial-review.md): integrated review before sharing.
-- [adversarial-notes/](adversarial-notes/): one note per adversarial review lens.
-
-The review found no P0/P1 contradictions in the current tradeoff framing. It
-does recommend keeping the docs caveated as hypotheses, treating provider-style
-relation boundaries as a cross-cutting design axis, and gathering measurements
-before making stronger recommendations.
+to evaluate before committing to any implementation path. The synthesis now
+also treats provider-style relation boundaries, proof-encoding coverage,
+scheduler semantics, timestamp/compaction policy, and rebuild invalidation as
+first-class evidence gaps rather than separate review notes.
 
 ## Option Tradeoff Pass
 
@@ -57,13 +49,17 @@ before making stronger recommendations.
 Current option tradeoff map:
 
 - Option 1 lowers syntax and frontend disruption by keeping equality/rebuild
-  native, but depends on a difficult delta contract between egglog and DD.
+  native, but depends on a difficult delta contract between egglog and DD,
+  including explicit rebuild invalidation and scheduler match selection.
 - Option 2 gives a clear relational equality specification, but current
-  proof/term encoding evidence raises overhead and container-support blockers.
+  proof/term encoding evidence raises overhead and cannot validate the full
+  Python/container/scheduler frontend surface.
 - Option 3 has broad long-term planning upside, but requires a large new
-  middle layer before the equality/rebuild boundary is proven.
+  middle layer, egglog-specific adapter, index layout, and invalidation model
+  before the equality/rebuild boundary is proven.
 - Option 4 avoids backend migration risk for existing semantics, but gives less
-  maintenance leverage from a shared substrate.
+  maintenance leverage from a shared substrate unless provider-style relation
+  boundaries isolate reusable pieces.
 
 ## Coverage
 
