@@ -1,0 +1,57 @@
+# Differential/Timely Substrate
+
+## Sources Read
+- `repos/differential-dataflow/differential-dataflow/src/operators/iterate.rs`: implementation of DD fixed-point iteration via nested scopes and feedback variables.
+- `repos/differential-dataflow/differential-dataflow/src/collection.rs`: collection operators showing joins, semijoins, reduces, distinct/threshold, consolidate, and arrangements.
+- `repos/differential-dataflow/differential-dataflow/src/operators/join.rs`: trace maintenance path for stateful joins.
+- `repos/differential-dataflow/differential-dataflow/src/operators/reduce.rs`: trace maintenance path for stateful reductions.
+- `repos/differential-dataflow/differential-dataflow/src/trace/mod.rs`: trace compaction contract for logical and physical frontiers.
+- `repos/differential-dataflow/mdbook/src/chapter_5/chapter_5.md`: arrangement user model and shared indexed-state motivation.
+- `repos/differential-dataflow/mdbook/src/chapter_5/chapter_5_3.md`: trace handles and compaction responsibilities.
+- `repos/differential-dataflow/mdbook/src/chapter_5/chapter_5_4.md`: entering arrangements into iterative scopes.
+- `repos/timely-dataflow/mdbook/src/chapter_3/chapter_3_1.md`: input advancement/progress requirements and timestamp overhead warning.
+- `repos/timely-dataflow/mdbook/src/chapter_4/chapter_4_2.md`: Timely loop variables, feedback, and nested iterative scopes.
+- `repos/timely-dataflow/timely/src/dataflow/operators/core/enterleave.rs`: scope boundary mechanics for `enter` and `leave`.
+- `papers/differentialdataflow.pdf`: paper-level model for partial-order versions, retained differences, and nested iteration; extracted with `uv run --with pypdf`.
+- `code/dd-pr-525-eqsat.rs`: local prototype of congruence/equality maintenance in Differential Dataflow.
+
+## Key Findings
+- Differential can plausibly own incremental relational maintenance: `join_map` arranges both inputs before `join_core`, `semijoin` arranges by key/self, and `reduce_core`, `threshold`, `distinct`, and `consolidate` all lower through arrangements or consolidation paths (`repos/differential-dataflow/differential-dataflow/src/collection.rs:800`, `:846`, `:873`, `:955`, `:1061`, `:1080`, `:1149`, `:1177`, `:1239`).
+- Arrangements are explicitly the shared indexed state DD wants users to reuse: the mdbook says operators otherwise repeatedly build maintained indexes, and arrangements keep indexed batches in a compact representation (`repos/differential-dataflow/mdbook/src/chapter_5/chapter_5.md:3`, `:7`, `:9`).
+- Nested iteration is native but timestamp-driven: DD `iterate` creates a nested `"Iterate"` scope, enters the outer collection, creates a `Variable`, sets it to the loop body result, and leaves the fixed point (`repos/differential-dataflow/differential-dataflow/src/operators/iterate.rs:81`, `:87`, `:94`, `:96`, `:97`). Timely's loop docs similarly use `feedback(1)`/`connect_loop` and nested `scope.iterative` (`repos/timely-dataflow/mdbook/src/chapter_4/chapter_4_2.md:3`, `:22`, `:38`, `:101`).
+- Loop-invariant arrangements can be entered rather than rebuilt: DD documents `arrangement.enter(scope)` as a timestamp-extending wrapper for nested scopes (`repos/differential-dataflow/mdbook/src/chapter_5/chapter_5_4.md:15`, `:17`, `:19`). This is important for static e-node/operator indexes used across equality iterations.
+- Traces retain historical update structure until compaction frontiers advance. Logical compaction can coalesce old timestamps; physical compaction merges batches and keeps a logarithmic number of batches, but callers lose historical cursor/query ability (`repos/differential-dataflow/differential-dataflow/src/trace/mod.rs:111`, `:118`, `:136`, `:142`, `:145`).
+- Stateful operators actively manage trace compaction based on input frontiers. Join sets logical compaction of one trace from the opposing input frontier and physical compaction from acknowledged batches (`repos/differential-dataflow/differential-dataflow/src/operators/join.rs:263`, `:272`, `:279`, `:283`, `:287`, `:294`, `:298`); reduce similarly advances source/output trace frontiers after sealing output (`repos/differential-dataflow/differential-dataflow/src/operators/reduce.rs:282`, `:286`, `:290`).
+- Timely progress is a real design constraint: inputs must `advance_to` for work to complete, and progress tracking does work proportional to introduced timestamps, so one timestamp per tiny e-graph edit is explicitly warned against (`repos/timely-dataflow/mdbook/src/chapter_3/chapter_3_1.md:11`, `:17`, `:19`).
+- The prototype encodes e-class maintenance as nested iterative DD computations: outer iteration maintains `(node, class)` from `nodes`, enters `nodes`/`equiv`, derives congruent ASTs with joins/reduces, then runs a second `symms.iterate` transitive closure over equivalence edges (`code/dd-pr-525-eqsat.rs:30`, `:34`, `:37`, `:45`, `:46`, `:56`, `:65`, `:67`, `:71`). The inline warning says not to implement connected components this way (`code/dd-pr-525-eqsat.rs:63`).
+- Equality maintenance may be expensive where equivalence changes rewrite many child class ids: the prototype joins every argument occurrence against `eq_class`, groups all rewritten args per node, joins by `(children, op)`, then reduces each congruence key to one representative (`code/dd-pr-525-eqsat.rs:40`, `:46`, `:47`, `:54`, `:56`). Large class merges can therefore invalidate high-degree argument/rebuild keys.
+- The PDF supports the substrate fit at the model level: it claims differential computation extends incremental computation to arbitrarily nested iteration, uses partially ordered versions, retains individual differences, and may emit multiple output differences for one input difference. That supports nested egglog-style saturation but also flags complexity when equality updates interact with iteration (`papers/differentialdataflow.pdf`, pages 1-4 extracted locally).
+
+## Relevance To The Main Objective
+- This supports moving egglog onto DD for the relational/incremental substrate: e-node tables, parent/child indexes, rule joins, semijoins, deduplication, and aggregates line up with DD collections, arrangements, and trace sharing.
+- It weakens the case for DD as the whole equality engine: union/e-class canonicalization is not just relational maintenance, and the local prototype expresses equality as repeated transitive closure plus reduce-heavy representative selection, which is likely the wrong asymptotic shape for frequent large merges.
+- Timely can plausibly own scheduling, nested-loop progress, input epochs, and backpressure/probes; DD can plausibly own maintained indexes and differential updates. Egglog-specific ownership probably remains canonicalization, union scheduling, rebuild policy, and rule planning around equality churn.
+
+## Likely Blockers
+- Equality merges can be non-local: changing one class id may change many argument tuples and parent congruence keys, forcing DD joins/reduces to process broad update waves rather than just a union-find edge.
+- Nested iteration over equality plus nested transitive closure risks high timestamp/progress overhead and large retained traces if every saturation/rebuild micro-step becomes a distinct time.
+- Trace handles and arrangements require disciplined compaction; holding traces for reuse can prevent efficient compaction (`repos/differential-dataflow/mdbook/src/chapter_5/chapter_5_3.md:89`, `:93`, `:95`).
+- DD reductions assume multiset differences and can see negative/non-positive intermediate multiplicities in variable patterns; `Variable::new_from` docs warn to be careful applying non-linear operators like `reduce` when source subtraction produces non-positive differences (`repos/differential-dataflow/differential-dataflow/src/operators/iterate.rs:232`, `:240`, `:245`).
+- The prototype's equivalence closure is intentionally naive (`code/dd-pr-525-eqsat.rs:63`) and should not be taken as evidence that DD already has an efficient union-find/congruence-closure operator.
+
+## Promising Connections
+- Use arrangements for stable e-node indexes: arrange children by child id for upward propagation, arrange `(op, canonical_children)` for congruence lookup, and share these indexes across rules instead of rebuilding per rule.
+- Batch equality updates at explicit Timely/DD epochs to reduce progress overhead, then use probes to know when a saturation wave has caught up.
+- Enter loop-invariant arrangements into iteration scopes so static or slowly changing relation indexes are timestamp-wrapped, not physically rebuilt.
+- Keep equality ownership split: DD maintains parent indexes and derived relation deltas; a specialized union/congruence component emits batched class-change deltas into DD.
+- Use trace compaction frontiers as a design lever for rebuild phases: after a phase's historical times are no longer queried, aggressively compact traces to avoid accumulating per-iteration equality history.
+
+## Evidence Needed Next
+- Measure the local prototype on merge-heavy cases: number of DD records emitted by `args.join_map(eq_class)`, congruence-key reduce, and `symms.iterate` as class size and parent fanout grow.
+- Compare DD transitive-closure equality with a specialized union-find/congruence-closure delta source feeding DD arrangements.
+- Inspect whether existing DD graph algorithms (`repos/differential-dataflow/differential-dataflow/src/algorithms/graphs/*`) offer a better connected-components maintenance pattern than `symms.iterate`.
+- Build a tiny e-graph workload with many equivalent leaves and many parents to see whether trace compaction catches up or whether equality-update history dominates memory.
+- Decide the timestamp granularity: per command, per rebuild phase, per rule batch, or per individual union; then measure Timely progress traffic.
+
+## Confidence
+- Medium: the repo and paper evidence strongly supports DD/Timely for incremental relational indexes and nested iteration, but the equality-maintenance cost needs measurements because the only local eqsat code is a prototype with an explicit naive-closure warning.

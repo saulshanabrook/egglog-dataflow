@@ -51,6 +51,22 @@ Can egglog be moved onto Differential Dataflow or a nearby dataflow/database
 library in a way that has a realistic chance of preserving egglog's semantics,
 performance-critical invariants, extensibility, and mostly-stable syntax?
 
+## Research Findings
+
+Durable reading notes and the current synthesis live in
+`findings/README.md`.
+
+Current provisional conclusion:
+
+- Do not attempt a full egglog-on-DD rewrite yet.
+- Continue with a narrow prototype centered on rule evaluation while keeping
+  equality maintenance, rebuilding, containers, analyses, and extraction native.
+- Treat DD/FlowLog/datatoad as plausible substrates for maintained relational
+  matching, arrangements, and join planning, not yet as replacements for the
+  whole egglog backend.
+- Use the next experiments in `findings/synthesis.md` to decide whether the
+  idea is worth a serious backend implementation attempt.
+
 ## Scientific Questions
 
 These questions are a falsification checklist. The goal is to refine them and
