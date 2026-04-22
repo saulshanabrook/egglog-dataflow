@@ -17,6 +17,7 @@
 - `repos/dataflow-join/src/extender.rs`: indexed stream extender implementation for count/propose/intersect over timely streams.
 - `repos/dataflow-join/src/index.rs`: multiversion keyed index and LSM-like update storage used by `dataflow-join`.
 - `messages/dec-17-2025-slack.md`: Yihong/Hangdong notes on FlowLog, DD parallelism through many small iterations, nested fixpoints, and schedule questions.
+- `repos/scaling-equality-saturation/egglog-new-backend.md`: egglog backend draft covering per-rule seminaive timestamps, timestamp-ordered table layout, Free Join, lazy subsets/indexes, dynamic variable ordering, and binary/bushy join future work.
 - `papers/FlowLog Efficient and Extensible Datalog via Incrementality.pdf`: paper text extracted with `uv run --with pypdf`; used for FlowLog's claimed IR/control split, DD substrate, SIP, and robust planning goals.
 - `papers/Free Join Unifying Worst-Case Optimal and Traditional Joins.pdf`: paper text extracted with `uv run --with pypdf`; used for WCOJ/binary-join unification and cyclic/acyclic tradeoff framing.
 - `papers/leapfrog treejoin.pdf`: paper text extracted with `uv run --with pypdf`; used for triejoin variable-order and worst-case-optimal join context.
@@ -31,11 +32,12 @@
 - Datatoad's representation is a bigger commitment than a plug-in operator: its facts are `Salad`/`FactLSM<Forest<Terms>>` values with column permutation, trie layers, pruning, exchange, and bulk layout changes (`repos/datatoad/src/rules/exec.rs`, `repos/datatoad/src/facts/trie.rs`). Egglog would need an egglog-specific adapter, index layout, and invalidation model to make that work.
 - `dataflow-join` shows WCOJ can be expressed as timely/dataflow operators: prefix extenders implement `count`, `propose`, and `intersect`, and `GenericJoin::extend` partitions prefixes by the cheapest proposer before intersection (`repos/dataflow-join/src/lib.rs`). But it is a low-level streaming join library, not a Datalog planner or recursive rule engine, so it is also inspiration rather than drop-in reuse.
 - The FlowLog paper argues for a relational IR per rule, Datalog-aware optimizations, SIP, and DD execution; the Free Join paper argues WCOJ and binary joins should be unified rather than treated as mutually exclusive. Together they support a hybrid design: FlowLog-style rule planning/control with datatoad/free-join-style multiway join operators for selected bodies.
+- Eli's backend draft adds direct egglog evidence for this hybrid direction: current egglog uses a Free Join variant with lazy subsets, cached hash indexes, fused scans, batching, vectorized actions, morsel-driven parallelism, and dynamic variable ordering. It also identifies binary and bushy plans as future work for common queries where Free Join/GJ has overhead (`repos/scaling-equality-saturation/egglog-new-backend.md`, `findings/source-notes/scaling-equality-saturation.md`).
 
 ## Relevance To The Main Objective
 - This supports moving egglog onto DD only if the design includes a planning layer above DD collections. DD gives incremental iteration and arrangements, but the inspected systems suggest rule evaluation needs explicit planning for recursion boundaries, arrangements, join order, semijoins, and aggregation-like postprocessing.
 - A FlowLog-style substrate is a plausible shape for egglog-on-DD: compile egglog rules/e-matches into a relational IR, stratify or otherwise separate recursive saturation control, then lower to DD transformations. That still leaves adapter, index, and invalidation work specific to egglog.
-- The substrate could also own physical schedule lowering: a user-facing egglog ruleset could be split into many smaller DD iterations or delta tasks if the split preserves logical schedule semantics and rebuild invalidation.
+- The substrate could also own physical schedule lowering: a user-facing egglog ruleset could be split into many smaller DD iterations or delta tasks if the split preserves logical schedule semantics, per-rule timestamp windows, and rebuild invalidation.
 - Datatoad-style WCOJ should be considered a join operator family inside that planner, not the whole substrate. It is most relevant for cyclic/high-arity rule bodies where binary joins create large intermediates.
 - Direct DD collections are still the execution target, but using them directly as the design abstraction would under-specify rule planning and likely recreate FlowLog's planner/compiler piecemeal.
 
@@ -46,6 +48,7 @@
 - WCOJ helps multiway joins, but many egglog costs may come from equality/rewrite churn, canonicalization, and maintaining derived relations across rebuilds rather than join asymptotics alone.
 - Incremental WCOJ inside recursive DD feedback needs careful timestamp/progress semantics; `dataflow-join` handles indexed stream extenders, but not Datalog stratification, egglog saturation control, or rebuild invalidation.
 - Small-iteration scheduling can conflict with egglog custom schedulers and side-effectful actions, because those may require all matches for a logical step before choosing which actions fire.
+- Per-rule seminaive timestamp windows add an index-planning constraint: timestamp constraints need efficient pushdown before joins, and value-ordered join indexes may need auxiliary time slicing.
 
 ## Promising Connections
 - Reuse FlowLog's conceptual pipeline: parse/rules -> catalog/IR -> optimizer/planner -> DD compiler, with egglog-specific operators for e-class canonicalization and rebuild-aware relation maintenance.
@@ -53,6 +56,7 @@
 - Replace or augment FlowLog's binary join core with a datatoad-like `count/propose/validate` operator for rule bodies that form cyclic joins or have repeated shared variables.
 - Use SIP/semijoin filtering from FlowLog before expensive e-matches, especially when one atom has selective bindings from a pattern root, symbol, or e-class id.
 - Use Free Join's framing as the long-term target: a unified planner that can choose binary joins, semijoins, or WCOJ without forcing all rules into one execution style.
+- Use current egglog Free Join as the baseline when evaluating DD/FlowLog/datatoad plans; the comparison should include dynamic variable ordering and binary/bushy alternatives, not only source-order binary joins.
 
 ## Evidence Needed Next
 - Build 3-5 concrete egglog rule/e-match patterns as relational queries and classify them as acyclic, cyclic, repeated-variable, or equality-heavy.
@@ -61,6 +65,7 @@
 - Prototype a minimal FlowLog-like relational IR for egglog atoms and check whether every needed rule side condition can become map/filter/join/antijoin/WCOJ.
 - Determine whether DD arrangements can serve as the backing indexes for WCOJ proposals, or whether trie/COLT-style indexes must be maintained separately.
 - Compare a bulk ruleset run against a small-iteration DD physical schedule on the same egglog rule cluster, measuring throughput, progress traffic, retained trace state, and final e-graph equivalence.
+- Add the scheduled reachability example from Eli's draft to rule-planner tests so any FlowLog/DD lowering proves per-rule timestamp freshness before measuring speed.
 
 ## Confidence
 - Medium: local code and PDF extraction strongly support the architectural comparison, but no egglog workload was measured against these join strategies in this pass.

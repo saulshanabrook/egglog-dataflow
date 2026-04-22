@@ -19,10 +19,13 @@
 - `repos/egglog/tests/proofs/commute-collapse.egg`: small proof example requiring commutation then constant folding.
 - `repos/egglog/tests/container-rebuild.egg`: examples where container equality becomes visible through rebuild.
 - `repos/egglog/tests/merge-during-rebuild.egg`: regression that non-union merge functions must fire during rebuild.
+- `repos/scaling-equality-saturation/egglog-new-backend.md`: maintainer design draft describing arbitrary schedules, per-rule seminaive timestamps, timestamp-ordered tables, two-phase query/merge execution, constructor/function split, rebuild, table providers, and Free Join.
 
 ## Key Findings
 - The normal compiler boundary is already relational: `CoreRule` is documented as conjunctive-query body plus SSA-like action head, with query compilation to GJ and action compilation to a small VM (`repos/egglog/src/core.rs:1`). `BackendRule` maps function atoms to table queries, primitives to external calls, and heads to `set`/`delete`/`subsume`/`union` actions (`repos/egglog/src/lib.rs:1986` and `repos/egglog/src/lib.rs:2006`).
 - A DD-like substrate could plausibly absorb rule matching, seminaive deltas, indexes, and recursive fixed-point scheduling. Current `step_rules` just collects rule ids and delegates to `backend.run_rules` (`repos/egglog/src/lib.rs:929`), while `core-relations` already tracks modified tables via a notification list and merges pending updates to a fixed point (`repos/egglog/core-relations/src/free_join/mod.rs:282` and `repos/egglog/core-relations/src/free_join/mod.rs:488`).
+- Eli's backend draft sharpens what "seminaive deltas" means for egglog: arbitrary user schedules break the ordinary global recent/stable/new criterion, so rows carry logical timestamps and each rule tracks the last timestamp it ran at. A DD-backed rule layer must preserve per-rule timestamp windows, not only global relation deltas (`repos/scaling-equality-saturation/egglog-new-backend.md`, `findings/source-notes/scaling-equality-saturation.md`).
+- The current native backend is structured for two-phase execution: rule queries read immutable table state and stage mutations, then table merges apply staged updates in bulk. The constructor/function split exists partly to make this low-coordination query phase possible while retaining nested constructor insertion and merge semantics (`repos/scaling-equality-saturation/egglog-new-backend.md`).
 - The hard part is not only joins; equality changes mutate the meaning of existing ids. Rebuild is a value-level operation that rewrites table contents using a `Rebuilder`, and the trait explicitly says doing this efficiently with rules is difficult because it requires finding changes in any column (`repos/egglog/core-relations/src/table_spec.rs:103`). This is exactly the kind of non-monotone, update-every-reference maintenance that may not map cleanly to ordinary DD collections.
 - Existing rebuild has several specialized fast paths: table rebuild chooses incremental vs full scan (`repos/egglog/core-relations/src/table/rebuild.rs:58`), maintains a rebuild index (`repos/egglog/core-relations/src/table/rebuild.rs:33`), and retimestamps dirty parent rows so seminaive treats them as fresh deltas (`repos/egglog/core-relations/src/table/rebuild.rs:77`). A DD port would need an equivalent invalidation story, not just differential joins.
 - Containers expose a likely failure mode for a naive relational encoding. `ContainerRebuildSummary::dirty_ids` records when container semantics change while the outer id stays stable; ordinary table rebuild handles changed-id cases, but stable dirty ids need parent-row refresh or seminaive misses newly matchable rows (`repos/egglog/core-relations/src/containers/mod.rs:76` and `repos/egglog/core-relations/src/free_join/mod.rs:371`).
@@ -34,11 +37,12 @@
 
 ## Relevance To The Main Objective
 - Supports the objective: the core language and proof encoding already describe egglog as relations plus rules over term/view/UF tables, so DD could be used as the substrate for matching, incremental joins, and some equality-maintenance relations.
-- Weakens the objective: the production backend contains custom mutation, rebuilding, timestamp/retimestamp, container, merge-function, and union-by-min locality mechanisms that are not obviously DD primitives. Replacing them risks semantic misses like the dirty-id/container case or performance regressions from over-materializing equality maintenance.
+- Weakens the objective: the production backend contains custom mutation, rebuilding, per-rule timestamp freshness, timestamp-range table access, container, merge-function, two-phase execution, and union-by-min locality mechanisms that are not obviously DD primitives. Replacing them risks semantic misses like the dirty-id/container case or performance regressions from over-materializing equality maintenance.
 
 ## Likely Blockers
 - Rebuild is non-local: a UF merge can require rewriting every table column that stores affected ids, plus container contents and parent rows.
 - Same-id semantic changes are not ordinary insert/delete deltas; DD would need explicit invalidation/retimestamping for rows whose keys did not change.
+- Arbitrary schedules make seminaive correctness rule-local. A backend that only tracks globally recent tuples can miss facts under schedules where one ruleset saturates before another.
 - Merge functions can fire during rebuild, not only during user `set` actions (`repos/egglog/tests/merge-during-rebuild.egg:1`), so a DD design must handle user-defined merge code inside equality maintenance.
 - Proof/term encoding is incomplete for current egglog features, including action lookups, custom sort containers, some primitive cases, input commands, and no-merge functions.
 - Proof/term encoding is only a partial validation path: it can specify supported equality and rebuild behavior, but it does not validate the full frontend surface around containers, Python commands, schedulers, presorts, primitives, or custom frontend extensions.
@@ -49,6 +53,7 @@
 - Treat `CoreRule` as the stable frontend IR and target DD from the same query/action split that `BackendRule` currently targets.
 - Use proof term encoding as an executable specification for relational equality maintenance: per-sort UF tables, per-function view tables, congruence rules, merge cleanup, and scheduled rebuild.
 - Model dirty-id handling as a first-class differential invalidation stream, not as an afterthought.
+- Treat per-rule last-run timestamps and timestamp-window scans as part of the rule-evaluation API, not as a private table optimization.
 - Preserve `TermDag`-style hash-consing for proof/extraction output while using relations for maintenance.
 - Reuse proof checker requirements as a test oracle: a DD-backed proof mode should produce proofs accepted by `ProofStore::check_proof`.
 
@@ -56,6 +61,7 @@
 - Measure normal backend vs proof/term encoding on rebuild-heavy tests to estimate the overhead of fully relationalized equality maintenance.
 - Build a tiny DD prototype for constructors, union-by-min parent relation, view relation, congruence, and rebuild; compare against `container-rebuild.egg` and `merge-during-rebuild.egg`.
 - Inspect `egglog-bridge` rule execution and `core-relations/src/free_join/execute.rs` to separate join-planning cost from mutation/rebuild cost.
+- Reproduce the scheduled reachability example from `repos/scaling-equality-saturation/egglog-new-backend.md` and use it as a semantic regression for per-rule seminaive freshness.
 - Find or create a minimal benchmark where dirty same-id container changes are required for seminaive visibility, then check whether a DD invalidation stream handles it.
 - Check whether DD can express path compression/parent canonicalization without repeatedly churning large parts of the collection.
 

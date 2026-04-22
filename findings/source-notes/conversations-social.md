@@ -4,6 +4,7 @@
 - `README.md`: frames the investigation as a falsification pass over technical, maintenance, and social reasons to move egglog onto DD or a nearby substrate.
 - `messages/oct-15-2024-zulip.md`: main multi-party design conversation around Frank McSherry's e-graph/DD prototype, WCOJ, rebuilding, analyses, scopes, and collaboration fit.
 - `messages/dec-17-2025-slack.md`: follow-up thread on FlowLog, datatoad, DD parallelism, nested fixed points, schedules, and extensibility.
+- `messages/eli-scheduling-seminaive.md`: Eli note pointing to the scaling equality saturation draft and highlighting seminaive plus arbitrary schedules as a major design constraint.
 - `repos/blog/posts/2024-10-19.md`: Frank's "Understanding E-Graphs" implementation note that triggered the Zulip thread and surfaced rebuild/indexing questions.
 - `repos/blog/posts/2016-06-21.md`: DD/Datalog background showing DD can express Datalog with explicit `iterate`, arbitrary input changes, and incremental correction.
 - `repos/blog/posts/2024-10-11.md`: Timely container and `columnar` context, relevant to custom data layouts as a possible shared substrate concern.
@@ -24,10 +25,12 @@
 - FlowLog is a plausible implementation reference, not merely related reading. The Slack thread says FlowLog is built on DD, benefits from columnar representation, spreads work across many small iterations for parallelism, and exposes nested fixed points that look like egglog's outer rule loop plus inner congruence closure; `repos/flowlog/README.md` confirms a compiler pipeline with stratification, planning, optimization, profiling, and execution modes including explicit loop blocks.
 - The nearby ecosystem offers alternatives if DD is too costly. `repos/datatoad/README.md` and `repos/blog/posts/2025-11-21.md` show active work on interactive columnar WCO Datalog, predicate-backed relations, GALEN-scale comparisons, and plans to transport lessons back to DD, suggesting egglog could collaborate on join/planning/layout ideas without moving all semantics into DD.
 - Custom extensibility is not optional. The Slack thread ends with Eli interested in replacing `core-relations` with something FlowLog-esque only if arbitrary schedules and custom tables like union-finds or containers remain feasible; `repos/blog/posts/2024-10-11.md` and Timely's container story make custom layouts plausible, but not egglog's container semantics.
+- Eli's later scheduling note sharpens the arbitrary-schedule concern: supporting seminaive evaluation while different rules run at different times is a major design constraint, not just a user-facing scheduling feature (`messages/eli-scheduling-seminaive.md`, `findings/source-notes/scaling-equality-saturation.md`).
 
 ## Relevance To The Main Objective
 - The conversations support investigating a DD/FlowLog-related backend because the people and projects are unusually aligned: DD already targets incremental recursive dataflow, FlowLog targets Datalog on DD, datatoad targets robust Datalog joins, and Frank is actively looking for e-graph-shaped cases. The evidence supports exploration and concrete reproductions, not a guarantee of shared maintenance payoff.
 - The same evidence weakens any simple "port egglog to DD" story. The likely hard parts are exactly egglog's differentiators: congruence closure, representative churn, arbitrary schedules, analyses through equality, custom containers, and extension points.
+- A DD/FlowLog collaboration should include the scheduled seminaive witness from Eli's draft, because it is small enough to discuss but captures a core difference from standard Datalog scheduling.
 - A realistic objective should be narrower at first: prototype a `core-relations` or rule-evaluation substrate boundary, then measure whether equality maintenance stays native, becomes DD collections, or uses a custom table/provider abstraction.
 
 ## Likely Blockers

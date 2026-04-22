@@ -87,6 +87,9 @@ implementation trail yet.
   e-matching can be expressed as maintained dataflow views?
 - Where do egglog schedules differ from "run all rules to one fixed point", and
   how should arbitrary schedules map onto DD loops or nested scopes?
+- How should a backend preserve per-rule seminaive freshness when different
+  rulesets run at different times and facts that are globally stable are still
+  new to a rule that has not run recently?
 - Can streaming worst-case optimal joins, columnar layouts, FlowLog-style
   planning, or datatoad-style execution improve egglog's relational e-matching?
 - What is the right boundary between native egglog rebuilding and DD-backed rule
@@ -238,12 +241,14 @@ passes. For the current consolidated conclusion, read `synthesis.md`.
 | --- | --- |
 | `../messages/oct-15-2024-zulip.md` | Main design discussion between Frank McSherry, Saul Shanabrook, Eli Rosenthal, Max Willsey, Oliver Flatt, and others. Important topics: an EqSat-in-Differential prototype, whether DD can express union-find and congruence closure, streaming WCOJ as semi-naive e-matching, equality retractions from changing e-class labels, nested scopes, contextual equality, multiple outputs, and analysis stratification. |
 | `../messages/dec-17-2025-slack.md` | Follow-up notes on FlowLog and datatoad. Important topics: FlowLog on DD, columnar representation, spreading work across many small iterations for DD parallelism, DD's nested fixed points as a possible match for egglog's outer rule loop plus inner congruence closure, lattice timestamps, arbitrary schedules, and the question of adding custom tables such as union-finds or containers. |
+| `../messages/eli-scheduling-seminaive.md` | Local preservation of Eli's comment pointing to the "Scheduling and Semi-Naive" section of the scaling equality saturation draft. Important topic: supporting both seminaive evaluation and arbitrary schedules is a major egglog design constraint. |
 
 ### Vendored Repositories
 
 | Path | Current checkout | Role |
 | --- | --- | --- |
 | `../repos/egglog` | `egraphs-good/egglog`, `main`, `b27cd225` | The implementation target. Important subtrees include `src/` for the core language and runtime, `core-relations/` for the current relation layer, `egglog-bridge/` for integration boundaries, `union-find/`, `numeric-id/`, `concurrency/`, `src/proofs/`, and the `tests/` corpus. |
+| `../repos/scaling-equality-saturation` | `ezrosent/80190c70245632388f536fa259ec54b8`, gist checkout, `f5956bb` | Eli Rosenthal's June 2025 backend design draft. Important topics: arbitrary schedules, per-rule seminaive logical timestamps, timestamp-ordered hash tables, two-phase query/merge execution, constructor/function split, rebuild, BYODS-style table interface, Free Join, dynamic variable ordering, benchmark caveats, and Timely/Differential as future work. This checkout is currently local source material rather than a registered submodule. |
 | `../repos/egglog-python` | `egraphs-good/egglog-python`, `main`, `8812ec9` | Python bindings and high-level user-facing API. Important sources include `docs/explanation/2026_02_containers.md`, `docs/reference/egglog-translation.md`, `docs/changelog.md`, and `python/tests/test_high_level.py`. This repo is the strongest local evidence that containers and higher-order container functions are part of the design target. |
 | `../repos/egglog-experimental` | `egraphs-good/egglog-experimental`, `main`, `eae9570` | Experimental extensions / standard-library-like layer on top of core egglog. Relevant features include `for`, `with-ruleset`, rationals, dynamic cost models, custom `run-with` schedulers, `get-size!`, and multi-extraction. Real workloads may depend on this surface. |
 | `../repos/egglog-tutorial` | `egraphs-good/egglog-tutorial`, `main`, `4ca08d2` | Compact examples for the language surface: basics, Datalog, analyses, scheduling, cost models, extraction, and a linear algebra compiler case study. Useful for calibrating small examples before attempting full egglog programs. |
@@ -418,7 +423,8 @@ added only when a research question needs them:
   current overhead and missing container support could make it a poor direct
   substrate without redesign.
 - Egglog schedules are richer than "run all rules to a single fixed point". Any
-  prototype should first show how arbitrary schedules map to DD loops.
+  prototype should first show how arbitrary schedules map to DD loops while
+  preserving per-rule seminaive timestamp windows.
 - Relational e-matching and streaming WCOJ line up conceptually, but rebuilding
   and changing e-class labels create deltas that must be handled explicitly.
 - Higher-level container operations are partly a way to avoid pairwise or

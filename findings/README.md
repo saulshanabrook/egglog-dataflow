@@ -26,6 +26,7 @@ index for deeper conclusions, methodology, option analysis, and source notes.
 | Datalog/WCOJ/Planning Systems | `source-notes/datalog-wcoj-planning.md` | Complete |
 | Comparative Extension Models | `source-notes/extension-models.md` | Complete |
 | Conversations + Social Motivation | `source-notes/conversations-social.md` | Complete |
+| Scaling Equality Saturation | `source-notes/scaling-equality-saturation.md` | Complete |
 
 ## Synthesis
 
@@ -39,7 +40,10 @@ schedules, extension APIs, and frontend compatibility remain the main blockers
 to evaluate before committing to any implementation path. The synthesis now
 also treats provider-style relation boundaries, proof-encoding coverage,
 scheduler semantics, timestamp/compaction policy, and rebuild invalidation as
-first-class evidence gaps rather than separate review notes.
+first-class evidence gaps rather than separate review notes. Eli's
+scaling-equality-saturation draft adds a sharper scheduling constraint:
+arbitrary schedules require per-rule seminaive freshness and timestamp-window
+table access.
 
 ## Option Tradeoff Pass
 
@@ -50,23 +54,29 @@ Current option tradeoff map:
 
 - Option 1 lowers syntax and frontend disruption by keeping equality/rebuild
   native, but depends on a difficult delta contract between egglog and DD,
-  including explicit rebuild invalidation and scheduler match selection.
+  including explicit rebuild invalidation, per-rule seminaive freshness, and
+  scheduler match selection.
 - Option 2 gives a clear relational equality specification, but current
   proof/term encoding evidence raises overhead and cannot validate the full
   Python/container/scheduler frontend surface.
 - Option 3 has broad long-term planning upside, but requires a large new
   middle layer, egglog-specific adapter, index layout, and invalidation model
-  before the equality/rebuild boundary is proven. A new
+  before the equality/rebuild boundary and schedule/freshness model are proven.
+  A new
   [small-iteration scheduling refinement](options/option-3-small-iteration-scheduling-refinement.md)
   asks whether that middle layer should also replace egglog's bulk physical
-  ruleset iteration with many smaller DD iterations.
+  ruleset iteration with many smaller DD iterations while preserving per-rule
+  timestamp windows.
 - Option 4 avoids backend migration risk for existing semantics, but gives less
   maintenance leverage from a shared substrate unless provider-style relation
-  boundaries isolate reusable pieces.
+  boundaries isolate reusable pieces. It is now a stronger baseline because the
+  native backend already has timestamp-ordered tables, staged mutation,
+  provider hooks, Free Join, and parallel bulk execution.
 
 ## Coverage
 
 The first reading pass covers every source cluster listed in the top-level
 README: core `egglog`, Python and experimental frontends, Differential/Timely,
 FlowLog/datatoad/WCOJ sources, comparative systems, local papers, local
-discussion transcripts, and high-signal blog posts.
+discussion transcripts, the scaling equality saturation draft, and high-signal
+blog posts.

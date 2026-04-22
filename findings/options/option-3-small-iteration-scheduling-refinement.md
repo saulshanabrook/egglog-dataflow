@@ -9,6 +9,10 @@ is spread across many iterations with small per-iteration deltas, because
 operators can work on different iterations at the same time and large batches
 are a poor fit for incrementality. Eli also points out that lattice timestamps
 could allow starting the next iteration before the previous one finishes.
+Eli's later backend draft adds the key constraint: arbitrary schedules also
+define seminaive freshness. Each rule must see facts inserted or refreshed since
+that rule last ran, not merely facts that are globally recent
+(`findings/source-notes/scaling-equality-saturation.md`).
 
 This suggests a refinement of Option 3: treat scheduling as part of the
 relational middle layer, not merely as a compatibility shim around the current
@@ -18,8 +22,8 @@ egglog scheduler.
 
 - Split scheduling into two layers:
   - **Logical schedule:** the user-facing ruleset, `run`, `saturate`, `seq`,
-    `repeat`, and `run-with` semantics that must be preserved or explicitly
-    scoped out.
+    `repeat`, and `run-with` semantics, including per-rule last-run timestamp
+    windows, that must be preserved or explicitly scoped out.
   - **Physical schedule:** the backend execution plan that chooses how to break
     rule matching, rebuild propagation, and derived relation maintenance into
     DD epochs, iterative scopes, and feedback loops.
@@ -29,6 +33,10 @@ egglog scheduler.
 - Use DD/Timely timestamps and iterative scopes to pipeline those small tasks
   when dependencies allow, rather than forcing one large "run all rules,
   rebuild, repeat" batch.
+- Keep egglog logical timestamps separate from DD physical progress times unless
+  a prototype proves they can be safely unified. The physical plan can be more
+  granular than the user schedule, but it must preserve each rule's freshness
+  window.
 - Keep native equality/rebuild initially, but expose rebuild invalidation and
   same-id dirty refresh as first-class events so micro-iterations see semantic
   changes that do not look like ordinary tuple inserts/deletes.
@@ -51,6 +59,10 @@ egglog scheduler.
   iteration (`repos/egglog/src/lib.rs`). A micro-iteration backend must still
   produce the same saturated result for schedule-insensitive, monotone rule
   sets.
+- Current seminaive correctness is rule-local under arbitrary schedules: a rule
+  that has not run recently must see rows older than the globally recent set if
+  those rows are new since that rule's last execution. This is the core witness
+  from `repos/scaling-equality-saturation/egglog-new-backend.md`.
 - Current custom schedulers can materialize all matches, choose a subset, keep
   residual matches, and delay action firing (`repos/egglog/src/scheduler.rs`).
   That is an observable contract for `run-with` and backoff-style schedulers.
@@ -79,6 +91,8 @@ egglog scheduler.
   physical execution. That is more ambitious than a rule-planning layer alone.
 - Custom schedulers may force full-match materialization and delayed firing,
   which works against micro-iteration pipelining.
+- Per-rule freshness may force extra timestamp-window indexes or arrangements,
+  which can reduce the expected benefit of small DD physical tasks.
 - It is unclear which egglog actions can be safely reordered across
   micro-iterations. `union` and monotone set-like actions are easier than
   `delete`, `subsume`, primitive calls, merge functions, analyses, and
@@ -93,6 +107,8 @@ egglog scheduler.
 - Build a schedule-lowering sketch for one ruleset with 3-5 interacting rules:
   current egglog bulk iteration, per-rule micro-iterations, and
   per-delta-family micro-iterations.
+- Reproduce Eli's scheduled reachability example and require every physical
+  schedule variant to produce the native per-rule seminaive result.
 - Classify actions in those rules as freely reorderable, rebuild-dependent, or
   scheduler-sensitive.
 - Prototype a DD/Timely toy loop with many small deltas and compare it with one
@@ -106,9 +122,9 @@ egglog scheduler.
 
 ## Current Assessment
 
-This refinement makes Option 3 more interesting but also more ambitious. It
+This refinement makes Option 3 more interesting but also more constrained. It
 could be the strongest DD-specific reason to depart from egglog's current
-physical scheduler: DD may benefit from many small overlapped iterations rather
-than large saturation batches. It should be treated as an experimental execution
-strategy for a supported subset first, not as a guaranteed replacement for
-custom scheduler semantics.
+physical scheduler, but only if physical micro-iterations preserve the logical
+per-rule timestamp semantics of egglog schedules. It should be treated as an
+experimental execution strategy for a supported subset first, not as a
+guaranteed replacement for custom scheduler or seminaive behavior.

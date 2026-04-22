@@ -50,3 +50,7 @@
 	path = repos/timely-dataflow
 	url = git@github.com:TimelyDataflow/timely-dataflow.git
 	branch = master
+[submodule "repos/scaling-equality-saturation"]
+	path = repos/scaling-equality-saturation
+	url = https://gist.github.com/ezrosent/80190c70245632388f536fa259ec54b8
+	branch = main

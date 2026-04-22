@@ -9,14 +9,20 @@ equality, containers, and rebuild-sensitive relations stay behind specialized
 providers. That axis needs a concrete comparison before it becomes a separate
 option or sub-option.
 
+Arbitrary scheduling with seminaive evaluation is another cross-cutting
+constraint. Eli's scaling-equality-saturation draft shows that egglog needs
+per-rule last-run timestamps and timestamp-window scans; options that move rule
+matching must preserve that logical freshness model, not only final saturated
+results.
+
 ## Option Tradeoffs
 
 | Option | Main Benefit | Long-Term Cost / Blocker | Note |
 | --- | --- | --- | --- |
-| 1. Native equality + DD/FlowLog rule evaluation | Tests maintained relational matching and indexing while keeping equality/rebuild/container behavior native. | Needs a precise delta interface for canonical-id changes, explicit rebuild invalidations, same-id dirty refresh, scheduler match selection, match deduplication, and action handoff. | [Option 1](option-1-native-equality-dd-rule-eval.md) |
-| 2. Proof/term encoding to DD | Provides a concrete relational specification for equality, UF/view/rebuild tables, and proof-oriented experiments. | Current encoding is slow, incomplete for current egglog features, only a partial validation oracle, and incompatible with container/presort/scheduler semantics without a native side channel. | [Option 2](option-2-proof-term-encoding-dd.md) |
-| 3. FlowLog/datatoad-like middle layer | Could become a coherent long-term relational planner with DD execution and WCOJ-style join kernels. | Requires a substantial new planner, index universe, recursive-control model, egglog-specific adapter, and rebuild/equality invalidation model. | [Option 3](option-3-flowlog-datatoad-middle-layer.md) |
-| 4. No DD backend, borrow ideas | Preserves existing semantics while incrementally adopting WCOJ planning, provider interfaces, columnar storage, profiling, or cleaner rule IR boundaries. | Does not answer the shared-substrate motivation unless provider-style boundaries isolate reusable pieces from native-only behavior. | [Option 4](option-4-no-dd-backend-borrow-ideas.md) |
+| 1. Native equality + DD/FlowLog rule evaluation | Tests maintained relational matching and indexing while keeping equality/rebuild/container behavior native. | Needs a precise delta interface for canonical-id changes, explicit rebuild invalidations, same-id dirty refresh, per-rule seminaive timestamps, scheduler match selection, match deduplication, and action handoff. | [Option 1](option-1-native-equality-dd-rule-eval.md) |
+| 2. Proof/term encoding to DD | Provides a concrete relational specification for equality, UF/view/rebuild tables, and proof-oriented experiments. | Current encoding is slow, incomplete for current egglog features, only a partial validation oracle, and incompatible with container/presort/scheduler/per-rule seminaive semantics without a native side channel. | [Option 2](option-2-proof-term-encoding-dd.md) |
+| 3. FlowLog/datatoad-like middle layer | Could become a coherent long-term relational planner with DD execution, WCOJ-style join kernels, and schedule-aware physical planning. | Requires a substantial new planner, index universe, recursive-control model, egglog-specific adapter, per-rule freshness model, and rebuild/equality invalidation model. | [Option 3](option-3-flowlog-datatoad-middle-layer.md) |
+| 4. No DD backend, borrow ideas | Preserves existing semantics while incrementally adopting WCOJ planning, provider interfaces, columnar storage, profiling, or cleaner rule IR boundaries. | Does not answer the shared-substrate motivation unless provider-style boundaries isolate reusable pieces from native-only behavior, but it can build on egglog's existing timestamp/index/provider machinery. | [Option 4](option-4-no-dd-backend-borrow-ideas.md) |
 
 Option 3 also has a scheduling refinement:
 [small-iteration scheduling](option-3-small-iteration-scheduling-refinement.md)
@@ -27,12 +33,14 @@ bulk physical iteration shape.
 ## Tradeoff Summary
 
 - Option 1 is the smallest migration surface, but it may force egglog and DD to
-  maintain overlapping indexes and carefully synchronized deltas.
+  maintain overlapping indexes and carefully synchronized deltas, including
+  per-rule freshness windows.
 - Option 2 is a clear specification path, but it currently looks too
   expensive and feature-incomplete for production lowering.
 - Option 3 has broad architecture upside, but it is a large system design
-  project rather than a small backend substitution.
+  project rather than a small backend substitution, especially if it owns
+  schedule lowering and seminaive timestamp semantics.
 - Option 4 avoids migration risk, but it gives up most of the social and
   maintenance benefit of sharing a substrate with DD/FlowLog/datatoad unless a
   provider-style boundary can separate reusable relation work from native-only
-  equality/container/rebuild behavior.
+  equality/container/rebuild/scheduling behavior.

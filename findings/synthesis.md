@@ -21,6 +21,9 @@ Evidence to continue:
 - Measurements show that timestamp granularity, trace compaction, rebuild
   invalidations, and same-id dirty refresh events stay bounded on rebuild-heavy
   cases.
+- A DD/FlowLog rule-evaluation prototype preserves egglog's per-rule seminaive
+  freshness under arbitrary user schedules, including rules that have not run
+  since older facts became stable globally.
 - A provider-style boundary can separate ordinary rule relations from
   equality/container/rebuild-sensitive relations without erasing the maintenance
   benefit of the shared substrate.
@@ -36,6 +39,9 @@ Evidence to stop:
 - Preserving custom scheduler semantics requires full match materialization,
   subset selection, and delayed action firing in a way that defeats the proposed
   incremental rule-evaluation boundary.
+- Preserving arbitrary schedules requires per-rule timestamp-window indexes or
+  DD traces that are as complex or expensive as the native timestamp-ordered
+  tables.
 - The only viable path changes egglog's user-facing language enough to become a
   different system rather than a backend/substrate replacement.
 
@@ -50,6 +56,11 @@ Evidence to stop:
   query bodies plus actions, and the current backend delegates rule execution to
   a relation layer, making rule matching a plausible substrate boundary
   (`source-notes/egglog-core-proof.md`).
+- Eli's scaling-equality-saturation draft makes the native backend a stronger
+  comparison point: egglog already has per-rule seminaive timestamps,
+  timestamp-ordered hash tables, staged mutation, table-provider hooks, Free
+  Join, dynamic variable ordering, and parallel bulk execution
+  (`source-notes/scaling-equality-saturation.md`).
 - DD/Timely directly supports maintained joins, arrangements, reductions,
   compaction, and nested iteration. Those match e-node indexes, parent indexes,
   seminaive matching, and some fixed-point structure (`source-notes/differential-timely.md`).
@@ -88,6 +99,11 @@ Evidence to stop:
   custom costs, schedulers, extraction, preserved Python calls, and
   `egglog-experimental` extensions all constrain the backend boundary
   (`source-notes/containers-frontends.md`).
+- Arbitrary schedules are not only frontend syntax. Standard global
+  recent/stable/new seminaive evaluation can be wrong when different rulesets
+  run at different times; egglog uses per-rule last-run timestamps and
+  timestamp-window table scans to preserve correctness
+  (`source-notes/scaling-equality-saturation.md`).
 - Proof/term encoding is only a partial validation oracle. It names useful
   equality/rebuild relations, but it cannot validate the full Python,
   container, scheduler, presort, primitive, and custom frontend surface
@@ -104,8 +120,8 @@ Evidence to stop:
      without immediately moving the hardest equality and container semantics.
    - Main blocker: the egglog/DD boundary would need exact handling for
      canonical-id changes, explicit rebuild-invalidation and same-id dirty
-     events, full-match/delayed-fire scheduler semantics, duplicate/stale
-     matches, and action handoff
+     events, per-rule seminaive timestamp windows, full-match/delayed-fire
+     scheduler semantics, duplicate/stale matches, and action handoff
      (`options/option-1-native-equality-dd-rule-eval.md`).
 
 2. **Proof/term encoding to DD**
@@ -115,7 +131,8 @@ Evidence to stop:
      state and could serve as a partial correctness oracle for other designs.
    - Main blocker: the current path is much slower, rejects custom
      containers/presorts, cannot validate the full Python/container/scheduler
-     surface, and shifts equality into many generated tables
+     surface or arbitrary-schedule seminaive behavior, and shifts equality into
+     many generated tables
      (`options/option-2-proof-term-encoding-dd.md`).
 
 3. **FlowLog/datatoad-like middle layer**
@@ -124,7 +141,7 @@ Evidence to stop:
      for rebuild/equality deltas.
    - Refinement: the middle layer may also own physical schedule lowering,
      splitting one logical ruleset into many small DD iterations when that
-     preserves user-visible semantics
+     preserves user-visible semantics and per-rule seminaive freshness
      (`options/option-3-small-iteration-scheduling-refinement.md`).
    - Potential benefit: could support a long-term relational architecture using
      FlowLog-like planner structure and datatoad/dataflow-join-style join
@@ -163,6 +180,26 @@ provider-boundary sketch with one ordinary relation, one equality/rebuild-aware
 provider, and one container/index provider, compared against both the native
 backend and a DD-backed rule-evaluation prototype.
 
+## Scaling Equality Saturation Update
+
+Eli's backend draft changes the scheduling conclusion. Arbitrary schedules are
+not just a compatibility feature around `run`, `saturate`, and `run-with`; they
+are part of seminaive correctness. Standard global recent/stable/new Datalog
+evaluation can miss matches when one ruleset saturates before another. Egglog's
+solution is to tag rows with logical timestamps and track each rule's last-run
+timestamp, so each rule sees rows inserted or refreshed since it last ran
+(`source-notes/scaling-equality-saturation.md`).
+
+That means any DD/FlowLog option that owns rule matching must preserve
+per-rule freshness windows. It can implement them with DD timestamps, with data
+columns plus arrangements, or by keeping the native timestamp-ordered table as a
+provider, but it cannot treat seminaive evaluation as a solved generic Datalog
+optimization. The same source also strengthens Option 4 as a baseline: the
+current backend already contains several database-engineering ideas a migration
+would need to replace or reuse, including staged mutation, timestamp-ordered
+hash tables, provider hooks, Free Join, dynamic variable ordering, and parallel
+bulk execution.
+
 ## Current Assessment
 
 No backend path is selected yet. The evidence is better read as a tradeoff map
@@ -171,9 +208,9 @@ than as a prescriptive implementation queue.
 The source evidence supports DD/FlowLog/datatoad as plausible references or
 substrates for maintained relational matching, arrangements, and maybe
 WCOJ-style planning. It does not yet show that all equality maintenance,
-rebuilding, containers, scheduling, or provider-specific behavior can move into
-that substrate without losing core egglog semantics or recreating the current
-backend complexity at a different layer.
+rebuilding, containers, per-rule seminaive scheduling, or provider-specific
+behavior can move into that substrate without losing core egglog semantics or
+recreating the current backend complexity at a different layer.
 
 The central question for any option is whether it can move enough real
 database/runtime responsibility out of egglog to justify its long-term cost. If
@@ -194,13 +231,14 @@ blocker rather than by a preferred order.
   and incremental body matching while keeping current equality/rebuild/container
   behavior native. Main blocker before trying: define and measure the delta
   contract for canonical ids, rebuild invalidation, same-id dirty refresh,
-  scheduler match selection, and action handoff
+  per-rule seminaive freshness, scheduler match selection, and action handoff
   (`options/option-1-native-equality-dd-rule-eval.md`).
 - **Option 2: proof/term encoding to DD.** Long-term benefit: a concrete
   relational specification for equality maintenance and proof experiments. Main
   blocker before trying: show that generated UF/view/rebuild tables can be made
   much cheaper and accept that containers, schedulers, presorts, and Python
-  frontends still need separate validation paths
+  frontends, plus arbitrary-schedule seminaive behavior, still need separate
+  validation paths
   (`options/option-2-proof-term-encoding-dd.md`).
 - **Option 3: FlowLog/datatoad-like middle layer.** Long-term benefit: a richer
   planner architecture inspired by DD execution, recursive control, and WCOJ
@@ -210,18 +248,21 @@ blocker rather than by a preferred order.
   (`options/option-3-flowlog-datatoad-middle-layer.md`). A scheduling
   refinement splits logical egglog schedules from physical execution schedules,
   then tests many small DD iterations against the current bulk ruleset iteration
+  while preserving per-rule last-run timestamp windows
   (`options/option-3-small-iteration-scheduling-refinement.md`).
 - **Option 4: no DD backend, borrow ideas.** Long-term benefit: lower migration
   risk for existing semantics, with incremental adoption of WCOJ, provider,
-  columnar, profiling, and rule-IR ideas. Main blocker before trying: this may
-  fail the social/maintenance goal by leaving egglog as the sole owner of the
-  hard runtime machinery (`options/option-4-no-dd-backend-borrow-ideas.md`).
+  columnar, profiling, timestamp/index, and rule-IR ideas. Main blocker before
+  trying: this may fail the social/maintenance goal by leaving egglog as the
+  sole owner of the hard runtime machinery
+  (`options/option-4-no-dd-backend-borrow-ideas.md`).
 
 Evidence that would clarify the choice:
 
 - Option 1 needs data on whether rebuild invalidation causes near-full
   retraction/reinsertion into DD on realistic equality merges, and whether
-  native action handoff creates stale or duplicate-heavy match streams.
+  native action handoff creates stale or duplicate-heavy match streams. It also
+  needs the scheduled reachability witness to pass with per-rule freshness.
 - Option 2 needs measurements of proof/term encoding overhead on small
   constructor/rebuild tests, plus a concrete story for containers and presorts.
 - Option 3 needs a small rule-IR sketch showing whether DD arrangements or
@@ -229,7 +270,7 @@ Evidence that would clarify the choice:
   full index universe.
 - The Option 3 scheduling refinement needs evidence that small DD iterations
   improve parallel throughput or memory without changing user-visible schedule
-  semantics, especially for custom schedulers.
+  semantics or per-rule seminaive windows, especially for custom schedulers.
 - Option 4 needs evidence that borrowed planning/profiling/provider ideas can
   address important egglog workloads well enough that the shared-substrate
   migration is not worth the cost.
@@ -246,6 +287,9 @@ Evidence that would clarify the choice:
   e-matching rule. Keep rebuild and union-find native; feed DD batched relation
   deltas and compare against current `core-relations`, including a case that
   requires same-id dirty refresh or explicit rebuild invalidation.
+- Reproduce Eli's scheduled reachability example and use it as the minimum
+  semantic regression for any DD/FlowLog rule-evaluation or schedule-lowering
+  prototype.
 - Reproduce the documented container witness
   `2 + a + b + b + 3` across binary A/C rules, multiset containers with an
   index, and higher-order multiset functions. Measure whether a DD-backed index
@@ -255,7 +299,8 @@ Evidence that would clarify the choice:
   operator on at least one cyclic pattern.
 - Prototype one FlowLog/DD-style micro-iteration schedule for an egglog ruleset
   and compare it with current bulk iteration on throughput, progress traffic,
-  retained trace state, rebuild invalidation volume, and final saturation.
+  retained trace state, rebuild invalidation volume, per-rule timestamp-window
+  correctness, and final saturation.
 - Sketch the minimum custom-provider interface required for equality,
   containers, and columnar relation storage, using Ascent BYODS as the
   comparison point.

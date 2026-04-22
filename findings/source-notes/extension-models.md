@@ -21,12 +21,14 @@
 - `repos/dynamic-datalog/differential-dataflow/src/bin/crdt.rs`: hand-written DD CRDT implementation using `iterate`, antijoins, reductions, and updates.
 - `repos/dynamic-datalog/differential-dataflow/src/bin/doop.rs`: hand-written DD DOOP implementation with large generated relation/index surface.
 - `repos/dynamic-datalog/differential-dataflow/src/bin/galen.rs`: hand-written DD GALEN implementation with explicit arrangements and recursive variables.
+- `repos/scaling-equality-saturation/egglog-new-backend.md`: egglog backend draft describing the native `Table` trait, mutation buffers, optional rebuild hooks, timestamp-sorted hash tables, and union-find behind a table provider API.
 
 ## Key Findings
 - Ascent's BYODS is the clearest local example of a maintainable extension boundary for non-standard relations: a relation can be tagged `#[ds(provider)]`, while provider macros return relation storage plus index adapters (`repos/ascent/BYODS.MD`, `repos/ascent/ascent/src/rel.rs`). This makes provider-style relation boundaries a first-class architecture axis, not just a local optimization.
 - The BYODS contract is powerful but not small. Custom providers must line up macro expansion, shared per-relation state, readable indexes, writable indexes, merge behavior, and sometimes parallel variants (`repos/ascent/BYODS.MD`, `repos/ascent/ascent/src/internal.rs`). That implies egglog-on-DD cannot treat "custom table" support as a late wrapper; it needs an explicit provider ABI and a comparison against the ordinary-relation path.
 - The Ascent BYODS examples map directly to egglog concerns: `eqrel` and `trrel_uf` provide equivalence/transitive relation semantics through specialized data structures (`repos/ascent/byods/ascent-byods-rels/src/eqrel.rs`, `repos/ascent/byods/ascent-byods-rels/src/trrel_uf.rs`). The Steensgaard example replaces explicit equivalence-closure rules with `#[ds(eqrel)]`, which is analogous to avoiding relationalizing all equality maintenance in egglog while still leaving ordinary relations available for DD/FlowLog-backed storage (`repos/ascent/byods/ascent-byods-rels/examples/steensgaard/main.rs`).
 - The Ascent paper strengthens the extensibility argument: Ascent's design goal is embedding logic rules in Rust with user-defined components, user-defined data types, lattices, generated indexes, and semi-naive evaluation. It reports comparable performance to Datafrog/Souffle on borrow-checker benchmarks, but this is from compiled Rust kernels, not DD traces (`papers/Seamless DeductiveInference via Macros.pdf`).
+- Egglog's own backend already has a BYODS-like interface. Eli's draft shows a `Table` trait with scans, constraint refinement, optional fast subsets, keyed lookup, staged mutation buffers, merge, updates-since queries, and rebuild hooks; union-find can live behind this API, but direct congruence closure was faster than treating it as an ordinary query (`repos/scaling-equality-saturation/egglog-new-backend.md`, `findings/source-notes/scaling-equality-saturation.md`).
 - Columnar storage is a plausible performance lever, not a semantic abstraction. `columnar` gives `#[derive(Columnar)]`, struct-of-arrays containers, few large primitive allocations, zero-copy byte conversion, and efficient field projection (`repos/columnar/README.md`, `repos/columnar/src/lib.rs`). The blog connects this to Timely's ability to ship non-`Vec<T>` containers (`repos/blog/posts/2024-10-11.md`).
 - Columnar storage is type-invasive: inserted values come back as reference-shaped values like `(&str, &i64)` rather than `&(String, i64)`, and the README explicitly warns that this may make values unusable as map keys, remove locality for coupled fields, and limit in-place mutation (`repos/columnar/README.md`). Egglog terms, e-class ids, and containers would need careful representation design before adopting it.
 - Dynamic Datalog is useful as an evaluation warning, not a reusable framework. The README says DD results are hand-written Rust and can include optimizations unavailable to Datalog systems; CRDT, DOOP, and GALEN each stress different features: negation/reduce idioms, scale, and skewed/cyclic joins (`repos/dynamic-datalog/README.md`).
@@ -37,10 +39,12 @@
 - These sources support moving some egglog rule evaluation onto a maintained dataflow substrate only if the design includes first-class extension points for custom relations, indexes, and storage layouts.
 - They weaken a full "DD owns everything" approach: the most relevant custom-equality example uses a provider (`eqrel`/`trrel_uf`) to avoid expressing closure purely as ordinary rules, suggesting egglog equality maintenance may also need specialized state.
 - Ordinary DD/FlowLog-backed relations could coexist with specialized equality, container, or rebuild providers, but that is a concrete architecture comparison to make, not an assumption to bake in.
+- The native `Table` trait is the most concrete local starting point for that comparison because it already names the operations a provider must satisfy: timestamp-window access, keyed lookup, staged writes, merge, optional rebuild, and constraint pushdown.
 - Columnar and WCOJ sources support optimizing relational e-matching inputs and joins, but not necessarily congruence closure, rebuilding, analyses, extraction, or container rebuilding.
 
 ## Likely Blockers
 - Provider ABI complexity: Ascent's BYODS surface is macro-heavy and trait-heavy; reproducing this around DD traces, updates, and arrangements could become another engine-specific abstraction layer.
+- Egglog's native provider boundary is already tied to seminaive timestamps and rebuild hooks. A DD-backed provider must preserve those operations or explicitly keep them native.
 - Equality churn: if egglog equality is modeled as ordinary DD collections, representative changes and cleanup may cause high retained-history or retraction costs; if modeled as custom providers, DD may not see enough structure to optimize.
 - Type mismatch from columnar: borrowed/reference-shaped access may not work directly for keys, hash maps, canonical e-class ids, or mutable rebuild paths.
 - Planning burden: Dynamic Datalog's DD examples are hand-optimized; an egglog backend would need an automatic planner for arrangements, delta rules, WCOJ stages, and possibly custom table operators.
@@ -49,6 +53,7 @@
 
 ## Promising Connections
 - Treat Ascent BYODS as a design pattern for an egglog backend interface: relation declarations can choose default DD-backed storage, equality-specific providers, container index providers, or columnar providers.
+- Compare any proposed DD/provider ABI against egglog's existing `Table` operations before inventing a new interface.
 - Use `ByodsBinRel` as a minimal inspiration for provider ergonomics: require `contains`, `iter_all`, keyed iterators, estimates, and insertion before exposing the full lower-level index API.
 - Use `columnar` for high-volume immutable or append-heavy fact batches crossing Timely/DD operator boundaries, especially relation rows with strings, enum terms, or nested AST-like payloads.
 - Use Dynamic Datalog's CRDT/DOOP/GALEN as non-egglog stress tests for any generated backend before claiming DD maintainability benefits.
@@ -57,6 +62,7 @@
 
 ## Evidence Needed Next
 - A tiny DD-backed relation-provider prototype with one ordinary relation, one `eqrel`-like custom provider, and one columnar-backed relation.
+- A side-by-side API sketch comparing Ascent BYODS, egglog's native `Table` trait, and the minimum DD-backed provider interface needed for timestamp-window seminaive evaluation.
 - Measurements comparing explicit relational equality closure against a custom union-find/equality provider on an egglog-shaped workload.
 - A generated-code review for one realistic egglog program lowered to DD: number of arrangements, variables, nested scopes, and custom operators.
 - Columnar microbenchmarks for actual egglog row shapes: constructor rows, e-class ids, small vectors/maps/multisets, and string/symbol-heavy terms.
