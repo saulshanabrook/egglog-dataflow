@@ -64,7 +64,7 @@
 - Inspect how egglog rebuild/canonicalization updates would appear as DD diffs: relation updates only, key rewrites, or full retractions/reinsertions.
 - Prototype a minimal FlowLog-like relational IR for egglog atoms and check whether every needed rule side condition can become map/filter/join/antijoin/WCOJ.
 - Determine whether DD arrangements can serve as the backing indexes for WCOJ proposals, or whether trie/COLT-style indexes must be maintained separately.
-- Compare a bulk ruleset run against a small-iteration DD physical schedule on the same egglog rule cluster, measuring throughput, progress traffic, retained trace state, and final e-graph equivalence.
+- Compare a bulk ruleset run against a small-iteration DD physical schedule on the same egglog rule cluster. For exact mode, measure throughput, progress traffic, retained trace state, per-rule freshness, and final e-graph equivalence. For Option 3b, first define which schedule observations are intentionally relaxed.
 - Add the scheduled reachability example from Eli's draft to rule-planner tests so any FlowLog/DD lowering proves per-rule timestamp freshness before measuring speed.
 
 ## Confidence

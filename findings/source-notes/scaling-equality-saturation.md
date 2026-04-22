@@ -18,14 +18,14 @@
 - The draft explicitly leaves Timely/Differential rehosting as future work: those systems appear to generalize what egglog can do, but that claim still needs confirmation against egglog's scheduling, timestamp, equality, and table-interface constraints.
 
 ## Relevance To The Main Objective
-- This source strengthens the case that a DD/FlowLog backend must model logical scheduling as a first-class interface. It is not enough to preserve final saturated results for all-rules-at-once runs; the backend must preserve per-rule freshness under arbitrary user schedules.
+- This source strengthens the case that a DD/FlowLog backend must model logical scheduling as a first-class interface. It is not enough to preserve final saturated results for all-rules-at-once runs; exact backend modes must preserve per-rule freshness under arbitrary user schedules, while relaxed modes must explicitly change and scope that contract.
 - It weakens any design that treats seminaive evaluation as a generic Datalog feature already solved by DD/FlowLog. Egglog's seminaive semantics depend on per-rule last-run timestamps and efficient timestamp-window scans.
 - It strengthens the native-improvement and provider-boundary arguments: the current backend already embodies several substrate-like ideas, including incremental timestamps, maintained indexes, staged mutation, dynamic table providers, rebuild hooks, and parallel bulk execution.
 
 ## Likely Blockers
 - DD timestamp/progress design must be reconciled with egglog's per-rule logical timestamps. A backend cannot collapse many logical rule executions into one coarse time if that loses rule-local freshness, but one dataflow time per tiny physical task may create too much progress and trace overhead.
 - A DD/FlowLog rule evaluator needs efficient timestamp-window access. If DD arrangements are keyed only by value or join attributes, preserving egglog seminaive behavior may require additional time-keyed arrangements or an auxiliary freshness index.
-- Small-iteration physical scheduling could conflict with logical seminaive windows: splitting a ruleset into many DD micro-iterations is valid only if it produces the same facts each rule would see under the user-visible schedule.
+- Small-iteration physical scheduling could conflict with logical seminaive windows. In exact modes, splitting a ruleset into many DD tasks is valid only if it produces the same facts each rule would see under the user-visible schedule. In Option 3b, the same idea becomes plausible only as an explicitly relaxed region with its own schedule contract.
 - Rehosting too much of the current backend risks duplicating existing table-provider, timestamp, rebuild, and mutation-buffer machinery rather than replacing it with a simpler shared substrate.
 - Current benchmark evidence is not enough to compare against DD/FlowLog. It is provisional, limited to available workloads, and includes unsubmitted low-level optimizations.
 
@@ -40,7 +40,7 @@
 - Reproduce the scheduled reachability example from the draft in native egglog and include it as a regression for any DD/FlowLog rule-evaluation prototype.
 - Measure the cost of preserving per-rule timestamp windows in a DD design: number of arrangements, trace times, progress messages, and retained records.
 - Compare DD value-keyed arrangements against native timestamp-ordered hash tables on one rule that needs both keyed lookup and timestamp-window slicing.
-- Measure whether Option 3 micro-iteration scheduling can preserve the same per-rule freshness windows while improving throughput or memory.
+- Measure whether Option 3a small-iteration scheduling can preserve the same per-rule freshness windows, and whether Option 3b relaxed small-iteration scheduling can improve throughput or memory for programs that accept a weaker schedule contract.
 - Compare native Free Join with binary/bushy planning on a few real egglog rule bodies before assuming DD binary joins or WCOJ kernels are the right default.
 
 ## Confidence

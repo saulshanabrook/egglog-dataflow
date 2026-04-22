@@ -55,7 +55,9 @@
 - Inspection of `repos/egglog/core-relations/`, `repos/egglog/union-find/`, and proof/term encoding paths to identify the minimum backend interface needed for custom tables, containers, and schedules.
 - Benchmarks that include cyclic multi-atom rules, representative churn, and container examples; GALEN-style Datalog alone is not representative of egglog semantics.
 - A concrete schedule-lowering example showing nested egglog schedules mapped to DD loops or FlowLog extended loops, including what can run concurrently and what must be staged.
-- A focused small-iteration experiment comparing current bulk ruleset iteration with a FlowLog/DD-style physical schedule that spreads a logical ruleset across many small DD iterations.
+- A focused Option 3b experiment comparing current bulk ruleset iteration with
+  a scoped relaxed FlowLog/DD-style physical schedule that spreads an eligible
+  ruleset across many small DD iterations.
 - A collaboration test case small enough for DD/FlowLog/datatoad maintainers to reason about but faithful enough to expose egglog's rebuild/equality problems.
 
 ## Confidence

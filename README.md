@@ -21,22 +21,24 @@ means worst-case optimal joins.
 
 ## Backend Options
 
-| Option | Potential Benefits | Long-Term Costs / Blockers | Link |
+The options are ordered as a rough complexity and disruption ladder. Exact
+scheduling preserves today's egglog contract, including custom schedules and
+per-rule seminaive freshness. Relaxed scheduling may fit DD better by allowing
+backend-chosen physical order inside explicit regions, but it changes the
+program contract and would need to be scoped.
+
+| Path | Potential Benefits | Long-Term Costs / Blockers | Link |
 | --- | --- | --- | --- |
-| Native equality + DD/FlowLog rule evaluation | Tests a shared relational substrate while preserving most existing egglog semantics. DD/FlowLog could own maintained rule indexes and incremental body matching. | Requires a precise delta boundary for canonical ids, explicit rebuild invalidations, same-id container refresh, per-rule seminaive freshness, custom scheduler match selection, match deduplication, and action handoff. It may duplicate indexed state across egglog and the substrate. | [Option 1](findings/options/option-1-native-equality-dd-rule-eval.md) |
-| FlowLog/datatoad-like middle layer | Could support a long-term relational planning layer with DD execution and WCOJ-style joins. | Requires a substantial new planner, index story, recursive-control model, schedule/freshness model, egglog-specific adapter, and equality/rebuild invalidation model before proving that the substrate boundary pays off. | [Option 3](findings/options/option-3-flowlog-datatoad-middle-layer.md) |
+| Native improvement / borrow ideas | Least disruptive baseline. Keeps the backend native while testing WCOJ planning, provider interfaces, columnar storage, profiling, timestamp/index improvements, and clearer rule IR boundaries. | Gives up much of the shared-substrate maintenance story unless provider boundaries isolate reusable relation work from equality, containers, rebuild, and scheduling. | [Option 4](findings/options/option-4-no-dd-backend-borrow-ideas.md) |
+| Exact hybrid DD rule evaluation | Tests a shared relational substrate while preserving native equality, rebuild, containers, and user-visible schedules. DD/FlowLog could own selected maintained rule indexes and incremental body matching. | Requires a precise delta boundary for canonical ids, rebuild invalidations, same-id container refresh, per-rule seminaive freshness, custom scheduler match selection, match deduplication, and action handoff. | [Option 1](findings/options/option-1-native-equality-dd-rule-eval.md) |
+| Option 3b: relaxed small-iteration DD scheduling | Lets DD choose many smaller overlapping physical iterations inside explicit relaxed regions, which may better match dataflow execution than large ruleset batches. | Higher semantic risk. Existing programs may rely on bounded `run`, staged `saturate`, blowup control, manual stratification, or exact custom scheduler behavior. | [Option 3b](findings/options/option-3b-relaxed-small-iteration-scheduling.md) |
+| Option 3a: exact FlowLog/datatoad middle layer | Could support a long-term relational planning layer with DD execution, WCOJ-style joins, and schedule-aware physical planning while preserving the current logical schedule contract. | Requires a substantial new planner, index story, recursive-control model, schedule/freshness model, egglog-specific adapter, and equality/rebuild invalidation model. | [Option 3a](findings/options/option-3-flowlog-datatoad-middle-layer.md) |
 | Proof/term encoding to DD | Gives a concrete relational specification for equality, UF/view/rebuild state, and proof-oriented experiments. | Current evidence says it is high-overhead, incomplete for current egglog features, only a partial validation oracle, and incompatible with container/presort/scheduler semantics without a separate native path. | [Option 2](findings/options/option-2-proof-term-encoding-dd.md) |
-| No DD backend, borrow ideas | Avoids changing frontend/container semantics while adopting WCOJ planning, provider interfaces, columnar storage, profiling, or clearer rule IR boundaries incrementally. | Gives up much of the shared-substrate maintenance story and leaves egglog owning the hard database/runtime complexity unless provider-style boundaries can isolate reusable pieces. | [Option 4](findings/options/option-4-no-dd-backend-borrow-ideas.md) |
 
 A provider-style relation boundary cuts across several options: ordinary rule
 relations might use DD/FlowLog while equality, containers, and rebuild-sensitive
 relations stay behind specialized providers. This is tracked as a first-class
 uncertainty in [findings/synthesis.md](findings/synthesis.md).
-
-An Option 3 scheduling refinement asks whether one logical ruleset could lower
-into many smaller DD iterations, rather than preserving egglog's current bulk
-physical iteration shape. See
-[small-iteration scheduling](findings/options/option-3-small-iteration-scheduling-refinement.md).
 
 ## How To Pick This Up
 

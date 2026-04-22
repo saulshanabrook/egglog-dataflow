@@ -12,7 +12,7 @@ index for deeper conclusions, methodology, option analysis, and source notes.
 | Path | Purpose |
 | --- | --- |
 | [synthesis.md](synthesis.md) | Consolidated evidence, continue/stop criteria, and possible next evidence-gathering work. |
-| [options/README.md](options/README.md) | Tradeoff analysis of the four backend boundary options. |
+| [options/README.md](options/README.md) | Tradeoff analysis of the backend boundary paths. |
 | [methodology.md](methodology.md) | Detailed research framing, scientific questions, source inventory, reading order, and design risks. |
 | [source-notes/](source-notes/) | First-pass evidence notes by source cluster. |
 
@@ -47,36 +47,39 @@ table access.
 
 ## Option Tradeoff Pass
 
-- [options/README.md](options/README.md): second-pass tradeoff analysis of the four
-  backend boundary options from `synthesis.md`.
+- [options/README.md](options/README.md): tradeoff analysis of the backend
+  boundary paths from `synthesis.md`.
 
-Current option tradeoff map:
+Current option tradeoff map, ordered by increasing complexity and disruption:
 
-- Option 1 lowers syntax and frontend disruption by keeping equality/rebuild
-  native, but depends on a difficult delta contract between egglog and DD,
-  including explicit rebuild invalidation, per-rule seminaive freshness, and
-  scheduler match selection.
-- Option 2 gives a clear relational equality specification, but current
-  proof/term encoding evidence raises overhead and cannot validate the full
+- Native improvement / borrow ideas avoids backend migration risk for existing
+  semantics, but gives less maintenance leverage from a shared substrate unless
+  provider-style relation boundaries isolate reusable pieces. It is now a
+  stronger baseline because the native backend already has timestamp-ordered
+  tables, staged mutation, provider hooks, Free Join, and parallel bulk
+  execution.
+- Exact hybrid DD rule evaluation lowers syntax and frontend disruption by
+  keeping equality/rebuild native, but depends on a difficult delta contract
+  between egglog and DD, including explicit rebuild invalidation, per-rule
+  seminaive freshness, and scheduler match selection.
+- [Option 3b: relaxed small-iteration scheduling](options/option-3b-relaxed-small-iteration-scheduling.md)
+  asks whether explicitly relaxed regions could replace egglog's bulk physical
+  ruleset iteration with many smaller DD iterations. It may fit DD better, but
+  it changes the schedule contract and must be scoped away from programs that
+  rely on exact `run`, staged `saturate`, blowup control, manual
+  stratification, or custom scheduler behavior.
+- [Option 3a: exact FlowLog/datatoad middle layer](options/option-3-flowlog-datatoad-middle-layer.md)
+  has broad long-term planning upside, but requires a large new middle layer,
+  egglog-specific adapter, index layout, invalidation model, and exact
+  schedule/freshness model before the equality/rebuild boundary is proven.
+- Proof/term encoding gives a clear relational equality specification, but
+  current evidence raises overhead concerns and cannot validate the full
   Python/container/scheduler frontend surface.
-- Option 3 has broad long-term planning upside, but requires a large new
-  middle layer, egglog-specific adapter, index layout, and invalidation model
-  before the equality/rebuild boundary and schedule/freshness model are proven.
-  A new
-  [small-iteration scheduling refinement](options/option-3-small-iteration-scheduling-refinement.md)
-  asks whether that middle layer should also replace egglog's bulk physical
-  ruleset iteration with many smaller DD iterations while preserving per-rule
-  timestamp windows.
-- Option 4 avoids backend migration risk for existing semantics, but gives less
-  maintenance leverage from a shared substrate unless provider-style relation
-  boundaries isolate reusable pieces. It is now a stronger baseline because the
-  native backend already has timestamp-ordered tables, staged mutation,
-  provider hooks, Free Join, and parallel bulk execution.
 
 ## Coverage
 
-The first reading pass covers every source cluster listed in the top-level
-README: core `egglog`, Python and experimental frontends, Differential/Timely,
-FlowLog/datatoad/WCOJ sources, comparative systems, local papers, local
-discussion transcripts, the scaling equality saturation draft, and high-signal
-blog posts.
+The first reading pass covers every source cluster listed in
+`methodology.md`: core `egglog`, Python and experimental frontends,
+Differential/Timely, FlowLog/datatoad/WCOJ sources, comparative systems, local
+papers, local discussion transcripts, the scaling equality saturation draft,
+and high-signal blog posts.
