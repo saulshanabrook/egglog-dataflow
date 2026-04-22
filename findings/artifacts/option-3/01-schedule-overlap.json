@@ -1,0 +1,164 @@
+{
+  "experiment_id": "option-3",
+  "lane": "01-schedule-overlap",
+  "workload": "mini / chain / fanout",
+  "command": [
+    "cargo test --manifest-path code/option3-overlap/Cargo.toml",
+    "cargo run --release --manifest-path code/option3-overlap/Cargo.toml -- --suite semantic --json-out findings/artifacts/option-3/raw/01-schedule-overlap-semantic.json",
+    "cargo run --release --manifest-path code/option3-overlap/Cargo.toml -- --suite scaling --json-out findings/artifacts/option-3/raw/01-schedule-overlap-scaling.json"
+  ],
+  "repo_state": {
+    "root": "/Users/saul/p/egglog-dataflow",
+    "git_head": "cd503798919131c1c8f66760cb18c561bd6cb2d2",
+    "git_dirty": true
+  },
+  "semantic_ok": true,
+  "freshness_ok": true,
+  "early_visibility_violations": 0,
+  "barrier_count": 260,
+  "barrier_reasons": [
+    "stop/start logical schedule boundary",
+    "synthetic native barrier forced overlap window to 1"
+  ],
+  "runtime_us": 577048,
+  "metrics": {
+    "key_question": "Can DD overlap physical work across logical schedule steps while preserving per-rule freshness?",
+    "option_implication": "Strengthens the schedule-overlap subclaim, but only before real native barriers are added.",
+    "performance_summary": "60 scaling runs, max runtime 577048 us, max frontier lag 3 tasks; wins are workload-dependent.",
+    "negative_control_failed_as_expected": true,
+    "semantic_cases": [
+      {
+        "mode": "oracle",
+        "semantic_ok": true,
+        "freshness_ok": true,
+        "early_visibility_violations": 0,
+        "barrier_count": 0,
+        "runtime_us": 1,
+        "candidate_count": 3,
+        "duplicate_stale_candidate_count": 0
+      },
+      {
+        "mode": "broken-global",
+        "semantic_ok": false,
+        "freshness_ok": false,
+        "early_visibility_violations": 0,
+        "barrier_count": 0,
+        "runtime_us": 0,
+        "candidate_count": 3,
+        "duplicate_stale_candidate_count": 1
+      },
+      {
+        "mode": "dd-barrier",
+        "semantic_ok": true,
+        "freshness_ok": true,
+        "early_visibility_violations": 0,
+        "barrier_count": 3,
+        "runtime_us": 1798,
+        "candidate_count": 3,
+        "duplicate_stale_candidate_count": 0
+      },
+      {
+        "mode": "dd-overlap",
+        "semantic_ok": true,
+        "freshness_ok": true,
+        "early_visibility_violations": 0,
+        "barrier_count": 0,
+        "runtime_us": 415,
+        "candidate_count": 3,
+        "duplicate_stale_candidate_count": 0
+      }
+    ],
+    "scaling_summary": {
+      "records": 60,
+      "semantic_ok_all": true,
+      "freshness_ok_all": true,
+      "early_visibility_violations_total": 0,
+      "max_frontier_lag_tasks": 3,
+      "candidate_count_range": [
+        24,
+        8256
+      ],
+      "duplicate_stale_candidate_count_total": 0,
+      "barrier_count_range": [
+        0,
+        260
+      ],
+      "barrier_count_histogram": {
+        "0": 24,
+        "2": 6,
+        "3": 12,
+        "19": 2,
+        "20": 4,
+        "67": 2,
+        "68": 4,
+        "259": 2,
+        "260": 4
+      },
+      "runtime_us_range": [
+        362,
+        577048
+      ],
+      "runtime_us_by_workload_workers": {
+        "chain_workers1": {
+          "records": 15,
+          "min": 1358,
+          "max": 333536
+        },
+        "chain_workers4": {
+          "records": 15,
+          "min": 1499,
+          "max": 577048
+        },
+        "fanout_workers1": {
+          "records": 15,
+          "min": 362,
+          "max": 1305
+        },
+        "fanout_workers4": {
+          "records": 15,
+          "min": 667,
+          "max": 1363
+        }
+      },
+      "window_behavior": {
+        "window1": {
+          "records": 24,
+          "max_frontier_lag_tasks": 0,
+          "barrier_count_range": [
+            3,
+            260
+          ],
+          "runtime_us_range": [
+            407,
+            577048
+          ]
+        },
+        "window2": {
+          "records": 12,
+          "max_frontier_lag_tasks": 1,
+          "barrier_count_range": [
+            0,
+            0
+          ],
+          "runtime_us_range": [
+            584,
+            379099
+          ]
+        },
+        "window4": {
+          "records": 24,
+          "max_frontier_lag_tasks": 3,
+          "barrier_count_range": [
+            0,
+            259
+          ],
+          "runtime_us_range": [
+            362,
+            567355
+          ]
+        }
+      }
+    }
+  },
+  "verdict": "pass with negative control: oracle and DD lanes pass, broken-global fails semantic and freshness as intended, and the scaling sweep stays clean with zero early visibility violations and bounded frontier lag."
+}

@@ -65,5 +65,18 @@
 - Find or create a minimal benchmark where dirty same-id container changes are required for seminaive visibility, then check whether a DD invalidation stream handles it.
 - Check whether DD can express path compression/parent canonicalization without repeatedly churning large parts of the collection.
 
+## Local Experiment Update
+- The equality/rebuild invalidation lane passed
+  `incremental_reinsert_canonicalizes_displaced_outer_id`,
+  `merge-during-rebuild.egg`, and
+  `repro-small-rebuild-fail-term-encoding.egg`
+  (`findings/experiments/option-3/README.md`).
+- The same pass confirms the current native semantics but not the row-level
+  DD-diff shape: canonical-id rewrite, rebuild-index hit, retraction,
+  reinsertion, and refresh-row counters are not exposed by the current binaries.
+- For DD/FlowLog designs, rebuild invalidation should therefore remain a
+  first-class instrumentation task before implementation, not an inferred
+  detail from passing regression tests.
+
 ## Confidence
 - Medium: the path-level evidence is strong for core/proof/rebuild mechanisms, but I did not run performance measurements or inspect every bridge execution path needed to quantify feasibility.

@@ -68,5 +68,18 @@
 - Compare a bulk ruleset run against a DD-overlapped physical schedule on the same egglog rule cluster, measuring throughput, progress traffic, retained trace state, per-rule freshness, final e-graph equivalence, and whether later-iteration outputs/actions are gated until the logical schedule permits them.
 - Add the scheduled reachability example from Eli's draft to rule-planner tests so any FlowLog/DD lowering proves per-rule timestamp freshness before measuring speed.
 
+## Local Experiment Update
+- The rule-classification lane separates fair join/planner targets from
+  rebuild/container/scheduler stressors: `line_graph_1`, `line_graph_2`, and
+  `intersection` are the current native join baselines, while AC/rebuild and
+  container cases should not be treated as fair WCOJ comparisons
+  (`findings/experiments/option-3/README.md`).
+- Native `Gj`, `PureSize`, and `MinCover` strategy smoke tests passed on the
+  representative line graph and intersection workloads. These are correctness
+  checks, not a plan-efficiency benchmark.
+- The `dataflow-join` WCOJ examples compile, but runtime measurement is blocked
+  in this checkout because no graph input dataset is mounted. WCOJ remains a
+  component follow-up, not evidence for an Option 3 replacement backend yet.
+
 ## Confidence
 - Medium: local code and PDF extraction strongly support the architectural comparison, but no egglog workload was measured against these join strategies in this pass.

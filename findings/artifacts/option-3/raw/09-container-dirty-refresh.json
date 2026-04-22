@@ -1,0 +1,52 @@
+[
+  {
+    "cmd": "cargo test -p egglog-core-relations nonincremental_dirty_ids_only_include_stable_ids -- --nocapture",
+    "code": 0,
+    "us": 98699,
+    "stdout_tail": [
+      "",
+      "running 1 test",
+      "test containers::tests::nonincremental_dirty_ids_only_include_stable_ids ... ok",
+      "",
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 52 filtered out; finished in 0.00s",
+      ""
+    ],
+    "stderr_tail": [
+      "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.05s",
+      "     Running unittests src/lib.rs (target/debug/deps/egglog_core_relations-59b098614b0aaa59)"
+    ]
+  },
+  {
+    "cmd": "cargo run -- tests/container-rebuild.egg",
+    "code": 0,
+    "us": 594143,
+    "stdout_tail": [
+      "(MyVec (vec-of (Num 1) (Num 1)))",
+      "(vec-of (VecContainer (vec-of (Add 1 2))))"
+    ],
+    "stderr_tail": [
+      "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.05s",
+      "     Running `target/debug/egglog tests/container-rebuild.egg`"
+    ]
+  },
+  {
+    "cmd": "cargo run -- tests/container-fail.egg",
+    "code": 0,
+    "us": 578007,
+    "stdout_tail": [],
+    "stderr_tail": [
+      "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.05s",
+      "     Running `target/debug/egglog tests/container-fail.egg`"
+    ]
+  },
+  {
+    "cmd": "cargo run -- tests/vec.egg",
+    "code": 0,
+    "us": 627058,
+    "stdout_tail": [],
+    "stderr_tail": [
+      "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.05s",
+      "     Running `target/debug/egglog tests/vec.egg`"
+    ]
+  }
+]

@@ -1,0 +1,48 @@
+{
+  "experiment_id": "option-3",
+  "lane": "11-adapter-complexity-audit",
+  "workload": "adapter versus new-backend surface audit across all Option 3 lanes",
+  "command": [
+    "python3 code/option3-overlap/scripts/validate_option3_lanes.py findings/artifacts/option-3",
+    "read findings/artifacts/option-3/02-rule-ir-classification.json",
+    "read findings/artifacts/option-3/06-native-join-strategies.json",
+    "read findings/artifacts/option-3/07-wcoj-baselines.json",
+    "read findings/artifacts/option-3/10-real-barrier-survival.json"
+  ],
+  "repo_state": {
+    "root": "/Users/saul/p/egglog-dataflow",
+    "git_head": "cd503798919131c1c8f66760cb18c561bd6cb2d2",
+    "git_dirty": true,
+    "notes": "Coordinator synthesis from validated lane artifacts."
+  },
+  "semantic_ok": null,
+  "freshness_ok": null,
+  "early_visibility_violations": null,
+  "barrier_count": null,
+  "barrier_reasons": [],
+  "runtime_us": null,
+  "metrics": {
+    "key_question": "Is the high Option 3 surface accidental adapter duplication or expected new-backend scope?",
+    "surface_area": {
+      "rule_ir": "expected backend scope: classification found binary-friendly, WCOJ-relevant, rebuild-heavy, container-heavy, and scheduler-sensitive rule families",
+      "timestamp_model": "expected backend scope: schedule lane requires per-rule last-run freshness and row timestamps",
+      "frontier_model": "expected backend scope: trace/progress lane uses frontier lag as the only current overlap safety signal",
+      "invalidation_model": "expected backend scope if owned directly: equality/rebuild lane needs representative rewrites, retractions/reinsertions, rebuild-index scans, and refresh rows; runtime counters are missing",
+      "container_refresh": "expected backend scope if moved: container lane requires same-id dirty_ids and parent-row refresh distinct from changed-id rebuild",
+      "scheduler_model": "expected backend scope if moved: scheduler lane requires full-match materialization, filtering, backoff, scoped scheduler bindings, and delayed firing",
+      "join_planner": "expected backend scope: native strategies pass smoke tests, but WCOJ runtime benchmarking is blocked without datasets",
+      "provider_boundary": "replacement criterion: the new backend must own moved providers rather than mirror native equality/container/rebuild providers"
+    },
+    "complexity_rating": "high",
+    "blockers_before_broad_new_backend": [
+      "instrument rebuild and container paths with row-level counters",
+      "prove a vertical slice owns rebuild/scheduler/container semantics without native shadow state",
+      "run WCOJ examples on mounted graph datasets and compare against native join plans",
+      "prototype a backend-owned provider boundary for the selected slice",
+      "measure trace memory and compaction, not only frontier lag"
+    ],
+    "performance_summary": "Planner and WCOJ lanes are correctness/compile probes rather than full runtime evidence; the only measured throughput signal is still the schedule-overlap harness.",
+    "option_implication": "Do not build a permanent adapter that duplicates native state. A new backend remains viable if the next vertical slice owns this scope directly and uses native egglog only as an oracle."
+  },
+  "verdict": "the surface is too high for a permanent adapter, but it is plausible backend scope if the new layer is authoritative rather than mirrored."
+}

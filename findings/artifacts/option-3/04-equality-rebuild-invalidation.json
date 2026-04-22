@@ -1,0 +1,61 @@
+{
+  "experiment_id": "option-3-04-equality-rebuild-invalidation",
+  "lane": "04-equality-rebuild-invalidation",
+  "workload": "equality-rebuild-invalidation",
+  "command": [
+    "cargo test -p egglog-core-relations incremental_reinsert_canonicalizes_displaced_outer_id -- --nocapture",
+    "cargo run -- tests/merge-during-rebuild.egg",
+    "cargo run -- --term-encoding tests/repro-small-rebuild-fail-term-encoding.egg"
+  ],
+  "repo_state": {
+    "root": "/Users/saul/p/egglog-dataflow/repos/egglog",
+    "git_head": "cd50379",
+    "git_dirty": true,
+    "notes": "Workspace already had unrelated untracked files under code/option3-overlap/ and findings/artifacts/option-3/."
+  },
+  "semantic_ok": true,
+  "freshness_ok": true,
+  "early_visibility_violations": 0,
+  "barrier_count": 0,
+  "barrier_reasons": [],
+  "runtime_us": 1440569,
+  "metrics": {
+    "key_question": "Does native equality/rebuild invalidation preserve semantics on rebuild-heavy regressions?",
+    "option_implication": "Native rebuild semantics are sound on these cases, but DD integration needs explicit row-level invalidation counters.",
+    "performance_summary": "Three equality/rebuild checks passed in 1440569 us total.",
+    "runs": [
+      {
+        "command": "cargo test -p egglog-core-relations incremental_reinsert_canonicalizes_displaced_outer_id -- --nocapture",
+        "exit_code": 0,
+        "runtime_us": 202513,
+        "notes": "Unit test passed."
+      },
+      {
+        "command": "cargo run -- tests/merge-during-rebuild.egg",
+        "exit_code": 0,
+        "runtime_us": 635523,
+        "notes": "Direct egglog run exited 0."
+      },
+      {
+        "command": "cargo run -- --term-encoding tests/repro-small-rebuild-fail-term-encoding.egg",
+        "exit_code": 0,
+        "runtime_us": 602533,
+        "notes": "Direct egglog run exited 0 with one non-strict-mode warning."
+      }
+    ],
+    "observations": {
+      "canonical_id_rewrites": null,
+      "row_retractions": null,
+      "row_reinserts": null,
+      "rebuild_index_hits": null,
+      "refresh_rows": null,
+      "dirty_ids": null,
+      "same_id_vs_changed_id": null
+    },
+    "limitations": [
+      "Current binaries do not expose counters for canonical-id rewrites, rebuild-index hits, row retractions, row reinserts, or refresh-row counts.",
+      "The runtime runs confirm semantic pass/fail only; the fine-grained row counts are source-inferred, not instrumented."
+    ]
+  },
+  "verdict": "Supported by source and runtime checks; equality/rebuild invalidation is functioning, but row-level counters are not surfaced by the current binaries."
+}

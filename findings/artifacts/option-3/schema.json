@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Option 3 experiment lane result",
+  "type": "object",
+  "required": [
+    "experiment_id",
+    "lane",
+    "workload",
+    "command",
+    "repo_state",
+    "semantic_ok",
+    "freshness_ok",
+    "early_visibility_violations",
+    "barrier_count",
+    "barrier_reasons",
+    "runtime_us",
+    "metrics",
+    "verdict"
+  ],
+  "properties": {
+    "experiment_id": { "type": "string" },
+    "lane": { "type": "string" },
+    "workload": { "type": "string" },
+    "command": {
+      "oneOf": [
+        { "type": "string" },
+        { "type": "array", "items": { "type": "string" } }
+      ]
+    },
+    "repo_state": {
+      "type": "object",
+      "required": ["root", "git_head", "git_dirty"],
+      "properties": {
+        "root": { "type": "string" },
+        "git_head": { "type": "string" },
+        "git_dirty": { "type": "boolean" },
+        "notes": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "semantic_ok": { "type": ["boolean", "null"] },
+    "freshness_ok": { "type": ["boolean", "null"] },
+    "early_visibility_violations": { "type": ["integer", "null"], "minimum": 0 },
+    "barrier_count": { "type": ["integer", "null"], "minimum": 0 },
+    "barrier_reasons": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "runtime_us": { "type": ["integer", "null"], "minimum": 0 },
+    "metrics": { "type": "object" },
+    "verdict": { "type": "string" }
+  },
+  "additionalProperties": true
+}

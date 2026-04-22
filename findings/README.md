@@ -12,7 +12,9 @@ index for deeper conclusions, methodology, option analysis, and source notes.
 | Path | Purpose |
 | --- | --- |
 | [synthesis.md](synthesis.md) | Consolidated evidence, continue/stop criteria, and possible next evidence-gathering work. |
-| [option-3-experiments.md](option-3-experiments.md) | Runnable Option 3 scheduling-overlap experiment results and verdict. |
+| [option-3-experiments.md](option-3-experiments.md) | Runnable Option 3 scheduling-overlap reproducibility log. |
+| [option-3-experiment-findings.md](option-3-experiment-findings.md) | Canonical interpretation of what the Option 3 experiments show. |
+| [experiments/option-3/README.md](experiments/option-3/README.md) | Generated ordered index of the Option 3 lane artifacts. |
 | [options/README.md](options/README.md) | Tradeoff analysis of the backend boundary paths. |
 | [methodology.md](methodology.md) | Detailed research framing, scientific questions, source inventory, reading order, and design risks. |
 | [source-notes/](source-notes/) | First-pass evidence notes by source cluster. |
@@ -37,11 +39,10 @@ index for deeper conclusions, methodology, option analysis, and source notes.
 Current provisional assessment: no backend path has been selected. The evidence
 is strongest as a map of tradeoffs: DD/FlowLog/datatoad may help with relational
 matching and planning, while equality maintenance, rebuilding, containers,
-schedules, extension APIs, and frontend compatibility remain the main blockers
-to evaluate before committing to any implementation path. The first Option 3
-experiment shows that DD-overlapped physical scheduling can preserve per-rule
-freshness on the scheduled reachability witness, but synthetic native barriers
-and mixed scaling results keep Option 3 as a promising but constrained path.
+schedules, extension APIs, and frontend compatibility remain the main blockers.
+Option 3 now means a single-owner new backend path, not a permanent adapter over
+native tables. The experiments downgrade adapter duplication but leave a
+replacement-backend vertical slice as the next serious gate.
 
 ## Option Tradeoff Pass
 
@@ -60,12 +61,10 @@ Current option tradeoff map, ordered by increasing complexity and disruption:
   keeping equality/rebuild native, but depends on a difficult delta contract
   between egglog and DD, including explicit rebuild invalidation, per-rule
   seminaive freshness, and scheduler match selection.
-- [Option 3: FlowLog/datatoad middle layer with DD-overlapped scheduling](options/option-3-flowlog-datatoad-middle-layer.md)
-  now has a small positive semantic result: exact per-rule freshness and gated
-  visibility survived DD-overlapped physical execution on reachability. It still
-  requires a large new middle layer, egglog-specific adapter, index layout,
-  invalidation model, and evidence that native actions, rebuild, and custom
-  schedulers do not collapse the overlap back into barriers.
+- [Option 3: FlowLog/datatoad/DD-inspired new backend](options/option-3-new-backend.md)
+  now has a positive semantic schedule result and a clarified next gate: prove
+  a replacement-backend vertical slice with single ownership instead of
+  mirroring native rebuild, container, scheduler, and equality state.
 - Proof/term encoding gives a clear relational equality specification, but
   current evidence raises overhead concerns and cannot validate the full
   Python/container/scheduler frontend surface.

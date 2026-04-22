@@ -56,5 +56,16 @@
 - Check whether DD can expose per-rule match counts and selective match application without forcing all matches to materialize first.
 - Reproduce a schedule where one ruleset saturates before another and verify that a backend preserves per-rule seminaive freshness, not just global recent/stable tuple sets.
 
+## Local Experiment Update
+- The container dirty-refresh lane passed the same-id versus changed-id
+  `dirty_ids` unit test, plus `container-rebuild.egg`, `container-fail.egg`,
+  and `vec.egg` direct runs (`findings/experiments/option-3/README.md`).
+- The custom scheduler/backoff lane passed `math-backoff.egg`,
+  `repro-scheduler-scopes.egg`, and `schedule-demo.egg`. This supports the
+  current scheduler semantics, but also keeps full-match materialization,
+  admission, and scheduler scoping as explicit backend-boundary requirements.
+- Runtime counter coverage is still thin: the lanes do not expose refresh-row
+  counts, retained scheduler matches, or delayed-action counts directly.
+
 ## Confidence
 - Medium, because the frontend and documentation evidence is strong, but the exact feasibility depends on core Rust container/rebuild internals not read in this pass.

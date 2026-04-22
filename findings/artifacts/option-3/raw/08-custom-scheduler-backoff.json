@@ -1,0 +1,54 @@
+{
+  "experiment_id": "option-3",
+  "lane": "08-custom-scheduler-backoff",
+  "repo_state": {
+    "root": "/Users/saul/p/egglog-dataflow",
+    "git_head": "cd503798919131c1c8f66760cb18c561bd6cb2d2",
+    "git_dirty": true
+  },
+  "source_refs": {
+    "scheduler_state": "repos/egglog-experimental/src/scheduling.rs:42-190",
+    "backoff_impl": "repos/egglog-experimental/src/scheduling.rs:242-394",
+    "scheduler_visibility": "repos/egglog/src/scheduler.rs:224-240"
+  },
+  "runs": [
+    {
+      "name": "math_backoff",
+      "command": "cargo test -p egglog-experimental --test files math_backoff -- --exact --nocapture",
+      "status": "pass",
+      "runtime_us": 5611000,
+      "stdout_excerpt": [
+        "((Add 24991)",
+        " (Mul 14823)",
+        " (MathU 2645)",
+        " (is-not-zero 48))",
+        "final extract returned (Const (rational 1 1))"
+      ]
+    },
+    {
+      "name": "repro_scheduler_scopes",
+      "command": "cargo test -p egglog-experimental --test files repro_scheduler_scopes -- --exact --nocapture",
+      "status": "pass",
+      "runtime_us": 206000,
+      "stdout_excerpt": [
+        "((R 10))",
+        "test repro_scheduler_scopes ... ok"
+      ]
+    },
+    {
+      "name": "schedule_demo",
+      "command": "cargo test -p egglog --test files schedule_demo -- --exact --nocapture",
+      "status": "pass",
+      "runtime_us": 1665000,
+      "stdout_excerpt": [
+        "(left 10)",
+        "(right 9)",
+        "test schedule_demo ... ok"
+      ]
+    }
+  ],
+  "notes": [
+    "The experimental harness does not initialize logging, so back-off info logs were not emitted at runtime.",
+    "The source is the direct evidence for the scheduler admission/backoff policy and nested scheduler scoping."
+  ]
+}

@@ -1,0 +1,98 @@
+{
+  "experiment_id": "option-3",
+  "lane": "03-native-action-rebuild-barriers",
+  "workload": "native-action-rebuild-barriers",
+  "command": [
+    "cargo test -p egglog --test files container_rebuild -- --exact --nocapture",
+    "cargo test -p egglog --test files merge_during_rebuild -- --exact --nocapture",
+    "cargo test -p egglog --test files container_fail -- --exact --nocapture",
+    "cargo test -p egglog --test files repro_should_saturate -- --exact --nocapture",
+    "cargo test -p egglog --test files schedule_demo -- --exact --nocapture"
+  ],
+  "repo_state": {
+    "root": "/Users/saul/p/egglog-dataflow",
+    "git_head": "cd503798919131c1c8f66760cb18c561bd6cb2d2",
+    "git_dirty": true,
+    "notes": "Workspace already had untracked option-3 artifacts and generated build output before these lane files were written."
+  },
+  "semantic_ok": true,
+  "freshness_ok": true,
+  "early_visibility_violations": 0,
+  "barrier_count": 4,
+  "barrier_reasons": [
+    "container_rebuild: rebuilt constructor facts only become query-visible after the rebuild phase completes.",
+    "merge_during_rebuild: rebuild does not let the distance merge escape the hard action/rebuild boundary.",
+    "container_fail: a constructor over a rebuilt container child is not visible until the child itself exists.",
+    "repro_should_saturate: the action phase reaches a fixed point and stops after the single eligible firing."
+  ],
+  "runtime_us": 8559000,
+  "metrics": {
+    "key_question": "Do native action and rebuild boundaries collapse overlap into hard visibility barriers?",
+    "option_implication": "Adapter and hybrid DD/FlowLog designs should treat native rebuild/action behavior as an explicit barrier or handoff point. A replacement backend must model equivalent visibility boundaries internally.",
+    "performance_summary": "Five targeted native regression runs passed in 8559000 us total.",
+    "summary": "Native action/rebuild boundaries behaved like hard visibility barriers across all targeted regressions.",
+    "runs": [
+      {
+        "name": "container_rebuild",
+        "pass": true,
+        "runtime_us": 1769000,
+        "evidence": [
+          "extracted with cost 5: (MyVec (vec-of (Num 1) (Num 1)))",
+          "test container_rebuild ... ok"
+        ]
+      },
+      {
+        "name": "merge_during_rebuild",
+        "pass": true,
+        "runtime_us": 1726000,
+        "evidence": [
+          "Ran schedule (repeat 1 (run)).",
+          "Checked fact (= (distance $x $y) 1) after run 1."
+        ]
+      },
+      {
+        "name": "container_fail",
+        "pass": true,
+        "runtime_us": 1726000,
+        "evidence": [
+          "first run reported num matches 2 for the rewrite pair",
+          "after the container child existed, checked fact (= $resolved (b)) passed"
+        ]
+      },
+      {
+        "name": "repro_should_saturate",
+        "pass": true,
+        "runtime_us": 1669000,
+        "evidence": [
+          "Rule (rule ((MyMap )) ...) reported num matches 1",
+          "Function MyMap has size 1"
+        ]
+      },
+      {
+        "name": "schedule_demo",
+        "pass": true,
+        "runtime_us": 1665000,
+        "evidence": [
+          "Ran schedule (seq (repeat 10 ...))",
+          "Checked facts left 10 and right 9; the fail checks stayed failing as expected"
+        ]
+      }
+    ],
+    "tested_repos": {
+      "egglog": {
+        "root": "/Users/saul/p/egglog-dataflow/repos/egglog",
+        "git_head": "b27cd225ba3d646ff4327d076c7def665eadb232"
+      }
+    },
+    "source_evidence": {
+      "scheduler_boundary": "repos/egglog/src/scheduler.rs:166-240",
+      "barrier_semantics": "matches.choose_all() materializes only after filter_matches and the backend flush_updates() before action rules",
+      "synthetic_reference": "findings/artifacts/option3-overlap.json shows dd-barrier rows with barrier_count > 0, but those are synthetic baselines rather than native barriers"
+    },
+    "limitations": [
+      "early_visibility_violations was not exposed as a direct counter by the harness, so 0 records the observed outcome of the targeted regressions.",
+      "schedule_demo is supporting schedule-boundary evidence, not a rebuild-specific regression."
+    ]
+  },
+  "verdict": "Native action/rebuild boundaries are hard visibility barriers for these regressions."
+}

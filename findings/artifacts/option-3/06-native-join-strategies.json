@@ -1,0 +1,76 @@
+{
+  "experiment_id": "option-3",
+  "lane": "06-native-join-strategies",
+  "workload": "native egglog join strategy comparison",
+  "command": [
+    "cargo test --manifest-path repos/egglog/core-relations/Cargo.toml line_graph_1 -- --nocapture",
+    "cargo test --manifest-path repos/egglog/core-relations/Cargo.toml line_graph_2 -- --nocapture",
+    "cargo test --manifest-path repos/egglog/core-relations/Cargo.toml intersection -- --nocapture"
+  ],
+  "repo_state": {
+    "root": "/Users/saul/p/egglog-dataflow",
+    "git_head": "cd503798919131c1c8f66760cb18c561bd6cb2d2",
+    "git_dirty": true,
+    "notes": "Test runs validated the three exposed strategies: Gj, PureSize, and MinCover."
+  },
+  "semantic_ok": null,
+  "freshness_ok": null,
+  "early_visibility_violations": null,
+  "barrier_count": null,
+  "barrier_reasons": [],
+  "runtime_us": 30760000,
+  "metrics": {
+    "key_question": "Do native egglog join strategies preserve results on representative join shapes?",
+    "option_implication": "Native planner strategies are available as correctness baselines; more instrumentation is needed to compare plan efficiency.",
+    "performance_summary": "Correctness smoke tests passed; no per-strategy runtime or stage-count table was exposed by the test harness.",
+    "limitations": [
+      "semantic/freshness/barrier fields are null because this lane compares planner behavior, not query semantics.",
+      "The runs validated functional equivalence on representative tests; plan-shape diffs were inspected statically in free_join/plan.rs."
+    ],
+    "strategy_notes": {
+      "Gj": "Classic Generic Join: one variable per stage, ordered by minimum-size variable heuristics.",
+      "PureSize": "Free Join: order atoms by approximate size and build fused stages from the smallest covers first.",
+      "MinCover": "Free Join: approximate a minimal set cover before size ordering, to reduce the number of stages."
+    },
+    "runs": [
+      {
+        "workload": "line_graph_1",
+        "strategies": [
+          "PureSize",
+          "MinCover",
+          "Gj"
+        ],
+        "status": "pass",
+        "command": "cargo test --manifest-path repos/egglog/core-relations/Cargo.toml line_graph_1 -- --nocapture",
+        "observed": "3 tests passed; 50 filtered out."
+      },
+      {
+        "workload": "line_graph_2",
+        "strategies": [
+          "PureSize",
+          "MinCover",
+          "Gj"
+        ],
+        "status": "pass",
+        "command": "cargo test --manifest-path repos/egglog/core-relations/Cargo.toml line_graph_2 -- --nocapture",
+        "observed": "3 tests passed; 50 filtered out."
+      },
+      {
+        "workload": "intersection",
+        "strategies": [
+          "PureSize",
+          "MinCover",
+          "Gj"
+        ],
+        "status": "pass",
+        "command": "cargo test --manifest-path repos/egglog/core-relations/Cargo.toml intersection -- --nocapture",
+        "observed": "3 tests passed; 50 filtered out."
+      }
+    ],
+    "summary": {
+      "comparison_result": "all strategies passed on all three representative join shapes",
+      "planner_implication": "Gj is the generic-join baseline; PureSize and MinCover are free-join baselines that should be compared against Gj on plan efficiency, not output correctness."
+    }
+  },
+  "verdict": "pass"
+}

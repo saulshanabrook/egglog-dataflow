@@ -1,7 +1,26 @@
 # Option 4: No DD Backend, Borrow Ideas
 
 ## Viability
-- High, as a fallback and incremental improvement path. The source notes consistently show that DD/FlowLog/datatoad ideas are strongest around maintained indexes, rule planning, WCOJ, columnar layout, profiling, and custom relation providers, while egglog's hardest semantics remain native-specific: union-by-min equality maintenance, rebuild retimestamping, same-id container refresh, merge-during-rebuild, arbitrary schedules with per-rule seminaive timestamps, Python-facing containers, analyses, and extraction (`findings/source-notes/egglog-core-proof.md`, `findings/source-notes/containers-frontends.md`, `findings/source-notes/differential-timely.md`, `findings/source-notes/scaling-equality-saturation.md`). Borrowing ideas avoids a high-risk semantic migration while still attacking the current backend's relational and observability bottlenecks. The provider boundary question is not a minor implementation detail here: it may be the real split between ordinary DD-backed relations and specialized equality/container/rebuild providers.
+- High, and strengthened by the Option 3 follow-up gates, as a fallback and
+  incremental improvement path. The source notes consistently show that
+  DD/FlowLog/datatoad ideas are strongest around maintained indexes, rule
+  planning, WCOJ, columnar layout, profiling, and custom relation providers,
+  while egglog's hardest semantics remain native-specific: union-by-min
+  equality maintenance, rebuild retimestamping, same-id container refresh,
+  merge-during-rebuild, arbitrary schedules with per-rule seminaive timestamps,
+  Python-facing containers, analyses, and extraction
+  (`findings/source-notes/egglog-core-proof.md`,
+  `findings/source-notes/containers-frontends.md`,
+  `findings/source-notes/differential-timely.md`,
+  `findings/source-notes/scaling-equality-saturation.md`). The new Option 3
+  lanes confirm the same shape experimentally for adapter designs: native
+  regressions pass, but useful overlap through native-authoritative
+  rebuild/action/scheduler/container barriers is not demonstrated. Borrowing
+  ideas avoids a high-risk semantic migration while still attacking the current
+  backend's relational and observability bottlenecks. The provider boundary question is
+  not a minor implementation detail here: it may be the real split between
+  ordinary DD-backed relations and specialized equality/container/rebuild
+  providers.
 
 ## General Approach
 - Keep the production backend in egglog, but clarify the internal rule-evaluation boundary around `CoreRule`/`BackendRule` and `core-relations` so rule bodies can be planned, profiled, and executed through swappable native strategies.
@@ -44,7 +63,11 @@
 
 ## Evidence To Gather
 - Classify 3-5 real egglog rules as acyclic, cyclic, repeated-variable, or equality-heavy; compare current planning against a prototype WCOJ or semijoin plan on one cyclic/high-arity case.
-- Add profiling counters for current `core-relations`: per-rule matches, intermediate cardinalities, table rebuild rows scanned/retimestamped, dirty ids, dirty-container refresh rows, and scheduler skips.
+- Add profiling counters for current `core-relations`: per-rule matches,
+  intermediate cardinalities, table rebuild rows scanned/retimestamped, dirty
+  ids, dirty-container refresh rows, and scheduler skips. The Option 3 lanes
+  specifically showed that row-level rebuild/container counters and scheduler
+  admission counters are the missing evidence.
 - Add a scheduled reachability regression from Eli's draft to protect per-rule seminaive behavior while planner/storage experiments proceed.
 - Prototype one native relation-provider boundary with an ordinary relation, a union-find/equality-backed provider, and a container-index provider; verify `container-rebuild.egg` and `merge-during-rebuild.egg` still behave identically.
 - Microbenchmark columnar-inspired storage on actual egglog row shapes: constructor rows, parent indexes, symbol-heavy rows, and small container payloads.
@@ -52,4 +75,11 @@
 - Compare the provider-based boundary directly against the simpler DD/native split: measure whether specialized providers reduce churn, code complexity, and rebuild risk enough to justify the extra ABI surface.
 
 ## Current Assessment
-- This is the lowest-migration-risk path for preserving existing semantics while testing reusable ideas: better rule IR boundaries, WCOJ/SIP planning, provider interfaces, columnar storage experiments, and concrete profiling. Its weakness is that it may not satisfy the shared-substrate motivation unless provider-style boundaries isolate enough reusable relation work from native-only equality/container/rebuild behavior.
+- This is the lowest-migration-risk path for preserving existing semantics
+  while testing reusable ideas: better rule IR boundaries, WCOJ/SIP planning,
+  provider interfaces, columnar storage experiments, and concrete profiling.
+  The Option 3 follow-up gates make this the better incremental next step than
+  a broad rewrite because the measured blockers are instrumentation, planner
+  data, and provider boundaries. Its weakness is that it may not satisfy the shared-substrate
+  motivation unless provider-style boundaries isolate enough reusable relation
+  work from native-only equality/container/rebuild behavior.

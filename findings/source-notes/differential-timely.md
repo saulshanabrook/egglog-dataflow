@@ -77,5 +77,19 @@
   trace accounting, then add action/rebuild/custom-scheduler barriers to test
   whether the observed future-task lag survives realistic egglog boundaries.
 
+## Local Experiment Update
+- The ordered Option 3 lane pass validates the DD schedule-overlap subclaim:
+  all 60 scaling runs preserved semantic equivalence and per-rule freshness
+  with zero early visibility violations, and the largest observed frontier lag
+  was three logical tasks (`findings/experiments/option-3/README.md`).
+- The trace/progress lane is still only a proxy. It records frontier lag,
+  candidate counts, stale-candidate counts, and barrier counts, but the current
+  harness does not expose trace memory or compaction counters.
+- The real-barrier integration lane downgrades a permanent adapter
+  interpretation: exactness survived by respecting native
+  action/rebuild/scheduler/container boundaries, while useful overlap through
+  native-authoritative boundaries was not shown. It does not reject a
+  replacement backend that owns those boundaries directly.
+
 ## Confidence
 - Medium: the repo and paper evidence strongly supports DD/Timely for incremental relational indexes and nested iteration, but the equality-maintenance cost needs measurements because the only local eqsat code is a prototype with an explicit naive-closure warning.

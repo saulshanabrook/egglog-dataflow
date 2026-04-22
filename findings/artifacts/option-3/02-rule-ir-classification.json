@@ -1,0 +1,152 @@
+{
+  "experiment_id": "option-3",
+  "lane": "02-rule-ir-classification",
+  "workload": "egglog rule IR shape classification",
+  "command": [
+    "rg -n \"line_graph_1|line_graph_2|intersection|minimal_ac|merge|rebuild\" repos/egglog/core-relations/src/tests.rs",
+    "sed -n '120,980p' repos/egglog/core-relations/src/tests.rs",
+    "sed -n '1,220p' repos/egglog/tests/container-fail.egg",
+    "sed -n '1,220p' repos/egglog/tests/container-rebuild.egg"
+  ],
+  "repo_state": {
+    "root": "/Users/saul/p/egglog-dataflow",
+    "git_head": "cd503798919131c1c8f66760cb18c561bd6cb2d2",
+    "git_dirty": true,
+    "notes": "Classification mixed core-relations rule shapes with current-checkout egglog container regressions."
+  },
+  "semantic_ok": null,
+  "freshness_ok": null,
+  "early_visibility_violations": null,
+  "barrier_count": null,
+  "barrier_reasons": [],
+  "runtime_us": null,
+  "metrics": {
+    "key_question": "Which egglog rule shapes are fair join/planner targets versus rebuild/container/scheduler stressors?",
+    "option_implication": "Use binary and intersection shapes for join experiments; do not treat rebuild/container cases as WCOJ evidence.",
+    "limitation_summary": "Static classification only; no runtime semantics measured in this lane.",
+    "limitations": [
+      "semantic/freshness/barrier fields are null because this is a static classification lane."
+    ],
+    "cases": [
+      {
+        "name": "line_graph_1",
+        "source": "repos/egglog/core-relations/src/tests.rs",
+        "atoms": 2,
+        "variables": 3,
+        "repeated_variable": true,
+        "equality_or_filter_sensitive": false,
+        "rebuild_sensitive": false,
+        "container_action_sensitive": false,
+        "scheduler_sensitive": false,
+        "binary_friendly": true,
+        "cyclic": false,
+        "fair_wcoj_target": false,
+        "notes": "Two-edge path closure; simple binary join shape with one repeated variable."
+      },
+      {
+        "name": "line_graph_2",
+        "source": "repos/egglog/core-relations/src/tests.rs",
+        "atoms": 2,
+        "variables": 3,
+        "repeated_variable": true,
+        "equality_or_filter_sensitive": true,
+        "rebuild_sensitive": false,
+        "container_action_sensitive": false,
+        "scheduler_sensitive": false,
+        "binary_friendly": true,
+        "cyclic": false,
+        "fair_wcoj_target": false,
+        "notes": "Same path shape as line_graph_1, with a value filter on the middle variable."
+      },
+      {
+        "name": "intersection",
+        "source": "repos/egglog/core-relations/src/tests.rs",
+        "atoms": 3,
+        "variables": 1,
+        "repeated_variable": true,
+        "equality_or_filter_sensitive": true,
+        "rebuild_sensitive": false,
+        "container_action_sensitive": false,
+        "scheduler_sensitive": false,
+        "binary_friendly": true,
+        "cyclic": false,
+        "fair_wcoj_target": true,
+        "notes": "Three-way intersection on a single key; WCOJ-relevant, but still tiny and highly constrained."
+      },
+      {
+        "name": "minimal_ac",
+        "source": "repos/egglog/core-relations/src/tests.rs",
+        "atoms": 2,
+        "variables": 7,
+        "repeated_variable": true,
+        "equality_or_filter_sensitive": true,
+        "rebuild_sensitive": true,
+        "container_action_sensitive": false,
+        "scheduler_sensitive": true,
+        "binary_friendly": true,
+        "cyclic": true,
+        "fair_wcoj_target": false,
+        "notes": "Assoc/comm saturation harness with timestamped rebuild loops and lookup-or-insert actions."
+      },
+      {
+        "name": "ac_rebuild_loop",
+        "source": "repos/egglog/core-relations/src/tests.rs",
+        "atoms": 2,
+        "variables": 7,
+        "repeated_variable": true,
+        "equality_or_filter_sensitive": true,
+        "rebuild_sensitive": true,
+        "container_action_sensitive": false,
+        "scheduler_sensitive": true,
+        "binary_friendly": true,
+        "cyclic": true,
+        "fair_wcoj_target": false,
+        "notes": "Representative rebuild case from the saturating assoc/comm loop and its recanonicalization closure."
+      },
+      {
+        "name": "container-fail",
+        "source": "repos/egglog/tests/container-fail.egg",
+        "atoms": 1,
+        "variables": 1,
+        "repeated_variable": false,
+        "equality_or_filter_sensitive": false,
+        "rebuild_sensitive": true,
+        "container_action_sensitive": true,
+        "scheduler_sensitive": true,
+        "binary_friendly": false,
+        "cyclic": false,
+        "fair_wcoj_target": false,
+        "notes": "Unary container rewrite regression; the key issue is a rebuilt child becoming newly matchable under saturation."
+      },
+      {
+        "name": "container-rebuild",
+        "source": "repos/egglog/tests/container-rebuild.egg",
+        "atoms": 1,
+        "variables": 1,
+        "repeated_variable": false,
+        "equality_or_filter_sensitive": false,
+        "rebuild_sensitive": true,
+        "container_action_sensitive": true,
+        "scheduler_sensitive": true,
+        "binary_friendly": false,
+        "cyclic": false,
+        "fair_wcoj_target": false,
+        "notes": "Container rebuild regression and positive control showing rebuild can produce a fresh MyVec match after canonicalization."
+      }
+    ],
+    "summary": {
+      "binary_join_shapes": [
+        "line_graph_1",
+        "line_graph_2",
+        "intersection"
+      ],
+      "rebuild_or_container_shapes": [
+        "minimal_ac",
+        "ac_rebuild_loop",
+        "container-fail",
+        "container-rebuild"
+      ]
+    }
+  },
+  "verdict": "pass"
+}

@@ -53,5 +53,18 @@
   synthetic native barriers reduced the scheduling benefit.
 - Compare native Free Join with binary/bushy planning on a few real egglog rule bodies before assuming DD binary joins or WCOJ kernels are the right default.
 
+## Local Experiment Update
+- The Option 3 schedule lane now provides the requested per-rule freshness
+  regression: the broken global-seminaive baseline misses the witness, while
+  `dd-barrier` and `dd-overlap` match the oracle with zero early visibility
+  violations (`findings/option-3-experiments.md`).
+- Follow-up rebuild, container, and scheduler lanes passed their targeted
+  native regressions, but they reinforce the need for explicit logical
+  boundaries. Exactness is preserved by respecting rebuild/action/scheduler
+  phases, not by proving those phases can be freely overlapped.
+- The next useful scheduling measurement is direct instrumentation: per-rule
+  match/admission counters, row refresh counters, and DD trace memory/compaction
+  metrics.
+
 ## Confidence
 - Medium / High. The source is a detailed design draft from an egglog maintainer and directly addresses the scheduling/seminaive issue, but the performance numbers are explicitly provisional and this pass did not run the described benchmarks.

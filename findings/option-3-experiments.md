@@ -5,6 +5,10 @@ This records the first runnable Option 3 experiment suite in
 can keep future logical rule tasks physically in flight while preserving exact
 egglog-style per-rule freshness and visibility gates.
 
+For interpretation of the results, see
+`findings/option-3-experiment-findings.md`. For the generated ordered lane
+index, see `findings/experiments/option-3/README.md`.
+
 ## Commands
 
 ```bash
@@ -12,6 +16,8 @@ cargo test --manifest-path code/option3-overlap/Cargo.toml
 cargo run --release --manifest-path code/option3-overlap/Cargo.toml -- --suite semantic
 cargo run --release --manifest-path code/option3-overlap/Cargo.toml -- --suite semantic --json-out findings/artifacts/option3-overlap-semantic.json
 cargo run --release --manifest-path code/option3-overlap/Cargo.toml -- --suite scaling --json-out findings/artifacts/option3-overlap.json
+python3 code/option3-overlap/scripts/validate_option3_lanes.py findings/artifacts/option-3
+python3 code/option3-overlap/scripts/summarize_option3_lanes.py findings/artifacts/option-3 findings/experiments/option-3/README.md
 ```
 
 ## Semantic Gate
@@ -39,8 +45,8 @@ derives `reachable(1, 2)`, `reachable(2, 3)`, and `reachable(1, 3)`.
 | --- | --- | --- | --- | ---: | ---: | ---: | ---: |
 | oracle | true | true | - | 0 | 1 | 0 | 0 |
 | broken-global | false | false | `(1, 3)` | 0 | 0 | 0 | 0 |
-| dd-barrier | true | true | - | 0 | 1323 | 0 | 3 |
-| dd-overlap | true | true | - | 0 | 428 | 1 | 0 |
+| dd-barrier | true | true | - | 0 | 1798 | 0 | 3 |
+| dd-overlap | true | true | - | 0 | 415 | 1 | 0 |
 
 The broken global-seminaive model misses `reachable(1, 3)`, as intended. Both
 DD modes match the oracle. The overlapped mode has a future task in flight
@@ -55,30 +61,42 @@ logical task lag was three tasks.
 
 | Workload | Scale | Workers | Barrier us | Best overlap | Native barrier us | Verdict |
 | --- | ---: | ---: | ---: | --- | ---: | --- |
-| chain | 8 | 1 | 3887 | w=4, 668 us (5.82x) | 722 | win |
-| chain | 8 | 4 | 1534 | w=2, 1167 us (1.31x) | 1668 | win |
-| chain | 32 | 1 | 4941 | w=2, 4406 us (1.12x) | 3977 | win |
-| chain | 32 | 4 | 4636 | w=1, 4409 us (1.05x) | 5108 | win |
-| chain | 128 | 1 | 329958 | w=1, 307894 us (1.07x) | 307520 | win |
-| chain | 128 | 4 | 340313 | w=1, 349306 us (0.97x) | 404159 | neutral/loss |
-| fanout | 8 | 1 | 559 | w=4, 343 us (1.63x) | 354 | win |
-| fanout | 8 | 4 | 683 | w=4, 424 us (1.61x) | 463 | win |
-| fanout | 32 | 1 | 289 | w=1, 269 us (1.07x) | 328 | win |
-| fanout | 32 | 4 | 475 | w=4, 399 us (1.19x) | 448 | win |
-| fanout | 128 | 1 | 348 | w=4, 278 us (1.25x) | 299 | win |
-| fanout | 128 | 4 | 542 | w=4, 465 us (1.17x) | 480 | win |
+| chain | 8 | 1 | 3459 | w=2, 1358 us (2.55x) | 1424 | win |
+| chain | 8 | 4 | 2002 | w=4, 1601 us (1.25x) | 1499 | win |
+| chain | 32 | 1 | 5868 | w=4, 4939 us (1.19x) | 4484 | win |
+| chain | 32 | 4 | 4958 | w=2, 4683 us (1.06x) | 4810 | win |
+| chain | 128 | 1 | 311074 | w=1, 311281 us (1.00x) | 333536 | neutral/loss |
+| chain | 128 | 4 | 577048 | w=2, 379099 us (1.52x) | 567355 | win |
+| fanout | 8 | 1 | 479 | w=4, 362 us (1.32x) | 393 | win |
+| fanout | 8 | 4 | 856 | w=1, 667 us (1.28x) | 1184 | win |
+| fanout | 32 | 1 | 689 | w=4, 783 us (0.88x) | 823 | neutral/loss |
+| fanout | 32 | 4 | 1050 | w=4, 968 us (1.08x) | 1088 | win |
+| fanout | 128 | 1 | 407 | w=2, 619 us (0.66x) | 432 | neutral/loss |
+| fanout | 128 | 4 | 1363 | w=4, 787 us (1.73x) | 727 | win |
 
-## Verdict
+## Scheduling Result
 
-- The semantic part of the Option 3 hypothesis passed this small test:
-  DD-backed matching preserved per-rule freshness while allowing later logical
-  tasks to be issued early and gated by progress.
-- The performance evidence is positive but not decisive. Overlap helped most
-  runs, but the largest four-worker chain regressed slightly and the native
+- DD-backed matching preserved per-rule freshness while allowing later logical
+  tasks to be issued early and gated by progress in this harness.
+- The performance evidence is workload-dependent. Overlap helped 9 of the 12
+  summary rows, but three summary rows were neutral or losses and the native
   barrier variant sometimes matched or beat the best overlapped run.
-- Synthetic native barriers collapse the experiment back toward stop/start
-  behavior. This keeps native actions, rebuild, and custom scheduler boundaries
-  as first-class blockers for a broader Option 3 architecture.
-- This does not test equality maintenance, rebuild invalidation, containers,
-  WCOJ, or provider boundaries. Those remain follow-up gates before promoting
-  Option 3 beyond a promising scheduling result.
+- Synthetic native barriers collapse this harness back toward stop/start
+  behavior. The option-level interpretation of that result is maintained in
+  `findings/option-3-experiment-findings.md`.
+- This log does not measure equality maintenance, rebuild invalidation,
+  containers, WCOJ runtime, or provider boundaries.
+
+## Follow-Up Lane Artifacts
+
+The follow-up pass wrote ordered lane artifacts under
+`findings/artifacts/option-3` and lane notes under
+`findings/experiments/option-3`. Regenerate the index with:
+
+```bash
+python3 code/option3-overlap/scripts/validate_option3_lanes.py findings/artifacts/option-3
+python3 code/option3-overlap/scripts/summarize_option3_lanes.py findings/artifacts/option-3 findings/experiments/option-3/README.md
+```
+
+The canonical interpretation is intentionally kept out of this reproducibility
+log; see `findings/option-3-experiment-findings.md`.

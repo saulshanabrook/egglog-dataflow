@@ -24,12 +24,16 @@ Evidence to continue:
 - A DD/FlowLog rule-evaluation prototype preserves egglog's per-rule seminaive
   freshness under arbitrary user schedules, including rules that have not run
   since older facts became stable globally.
-- A FlowLog/DD middle-layer prototype can overlap physical work across logical
+- A FlowLog/DD-inspired backend slice can overlap physical work across logical
   egglog iterations while preserving exact logical schedule semantics, using
   DD/Timely timestamp and frontier tracking.
 - The first Option 3 scheduling prototype preserved per-rule freshness and
   gated visibility on the scheduled reachability witness while allowing up to
   three future logical tasks in flight (`option-3-experiments.md`).
+- Follow-up Option 3 lanes preserved exactness on targeted rebuild, container,
+  equality, and scheduler regressions while exposing a high adapter surface and
+  barrier-shaped native boundaries (`option-3-experiment-findings.md`,
+  `experiments/option-3/README.md`).
 - A provider-style boundary can separate ordinary rule relations from
   equality/container/rebuild-sensitive relations without erasing the maintenance
   benefit of the shared substrate.
@@ -48,9 +52,14 @@ Evidence to stop:
 - Preserving arbitrary schedules requires per-rule timestamp-window indexes or
   DD traces that are as complex or expensive as the native timestamp-ordered
   tables.
-- DD-overlapped execution collapses back into stop/start barriers because
-  rebuild, native actions, custom schedulers, or per-rule freshness require
-  every logical iteration to finish before useful later work can proceed.
+- DD-overlapped execution cannot deliver useful overlap even inside a
+  single-owner backend because rebuild, actions, custom schedulers, or
+  per-rule freshness require every logical iteration to finish before useful
+  later work can proceed.
+- A permanent adapter requires rule IR, timestamp/frontier assignment, rebuild
+  invalidation, same-id container refresh, scheduler admission, WCOJ/native
+  planner selection, and provider-boundary semantics while native egglog still
+  owns the same behavior.
 
 ## Arguments For
 
@@ -124,7 +133,7 @@ per-rule timestamp windows, custom scheduler behavior, bounded `run`, staged
 `saturate`, ruleset order, and manual stratification. A DD/FlowLog-backed design
 that claims compatibility must preserve those observations
 (`options/option-1-native-equality-dd-rule-eval.md`,
-`options/option-3-flowlog-datatoad-middle-layer.md`,
+`options/option-3-new-backend.md`,
 `source-notes/scaling-equality-saturation.md`).
 
 DD-overlapped physical scheduling is different from semantic relaxation. Timely
@@ -132,7 +141,7 @@ supports nested/product timestamps and frontiers; DD examples explicitly show
 multiple input rounds in flight to improve throughput without changing the
 computation's output, apart from batching of observed changes
 (`source-notes/differential-timely.md`, `messages/eli-dd-overlapped-scheduling.md`).
-The Option 3 hypothesis is that a middle layer can use this machinery to start
+The Option 3 hypothesis is that a new backend can use this machinery to start
 physical work for logical iteration `N+1` before all of iteration `N` has
 finished, then gate visibility of later matches/actions until frontiers prove
 the required earlier work is complete.
@@ -142,8 +151,18 @@ hypothesis on a small reachability workload: the broken global-seminaive model
 misses `reachable(1, 3)`, while `dd-barrier` and `dd-overlap` match the oracle
 with zero early visibility violations (`option-3-experiments.md`). The
 performance result is not decisive: overlap wins most small/medium runs, but
-large-chain and multi-worker cases are mixed, and synthetic native barriers
-collapse the setup back toward stop/start behavior.
+three of twelve summary rows are neutral or losses, and synthetic native
+barriers collapse the setup back toward stop/start behavior.
+
+The follow-up lane pass sharpens the ownership question. Native rebuild/action,
+equality/rebuild, container dirty-refresh, and custom scheduler/backoff
+regressions pass when their native boundaries are respected, but the integration
+lane does not show useful overlap through native-authoritative barriers. That
+downgrades a permanent adapter that mirrors native state. It does not reject a
+replacement backend that owns those responsibilities directly. The planner
+lanes are also incomplete as performance evidence: native join strategies pass
+smoke tests, while WCOJ examples compile but lack graph inputs for runtime
+comparison.
 
 Explicitly relaxed scheduling remains only a fallback variant. It may still be
 worth studying if exact overlap is too constrained, but it would require a
@@ -182,23 +201,21 @@ ranking.
      scheduler semantics, duplicate/stale matches, and action handoff
      (`options/option-1-native-equality-dd-rule-eval.md`).
 
-3. **FlowLog/datatoad middle layer with DD-overlapped scheduling**
-   - Build or adapt an intermediate relational planner with DD execution,
-     datatoad/WCOJ operators for selected joins, and egglog-specific operators
-     for rebuild/equality deltas.
+3. **FlowLog/datatoad/DD-inspired new backend**
+   - Build an authoritative backend with FlowLog-like planning, DD/Timely
+     execution and progress, datatoad/WCOJ operators for selected joins, and
+     backend-owned semantics for the moved relation state.
    - Preserve current logical schedule semantics while letting DD overlap
      physical work across logical iterations when timestamp/frontier tracking
      proves later work cannot become visible too early.
-   - Potential benefit: could support a long-term relational architecture using
+   - Potential benefit: could support a long-term relational backend using
      FlowLog-like planner structure and datatoad/dataflow-join-style join
-     kernels between the frontend and runtime, while exposing a DD-specific
-     parallelism benefit that egglog's stop/start execution does not currently
-     have.
-   - Main blocker: it requires a substantial new planner, index model,
-     recursive-control story, egglog-specific adapter, timestamp/frontier
-     design, exact schedule/freshness model, and equality/rebuild invalidation
-     model before the smaller substrate boundary is proven
-     (`options/option-3-flowlog-datatoad-middle-layer.md`).
+     kernels, while avoiding permanent duplicate state by replacing rather than
+     shadowing native backend responsibilities.
+   - Main blocker: the next gate must prove single ownership in a vertical
+     slice, including per-rule freshness, rebuild/canonicalization,
+     dirty-refresh-style invalidation, scheduler materialization, and
+     step-visible native-oracle equivalence (`options/option-3-new-backend.md`).
 
 4. **Proof/term encoding to DD**
    - Use egglog's proof/term encoding as a relational specification of equality
@@ -264,11 +281,15 @@ rebuilding, containers, per-rule seminaive scheduling, or provider-specific
 behavior can move into that substrate without losing core egglog semantics or
 recreating the current backend complexity at a different layer.
 
-The Option 3 scheduling prototype narrows one uncertainty: per-rule seminaive
+The Option 3 experiment suite narrows several uncertainties: per-rule seminaive
 freshness can be preserved in a DD-backed matcher for the corrected scheduled
-reachability witness. It does not settle the broader backend question because it
-does not include equality maintenance, rebuild invalidation, containers, WCOJ,
-native actions, or custom scheduler match selection.
+reachability witness, and targeted native rebuild/container/scheduler
+regressions pass under the current native semantics. It points away from a
+permanent adapter because real native phases remain barrier-shaped, rebuild and
+container counters are not yet exposed, WCOJ has no runtime dataset in this
+checkout, and an adapter would duplicate too many egglog-specific
+responsibilities. It leaves open a replacement backend that owns those
+responsibilities directly.
 
 The central question for any option is whether it can move enough real
 database/runtime responsibility out of egglog to justify its long-term cost. If
@@ -298,17 +319,16 @@ much semantic and architectural change the project is willing to consider.
   canonical ids, rebuild invalidation, same-id dirty refresh, per-rule seminaive
   freshness, scheduler match selection, and action handoff
   (`options/option-1-native-equality-dd-rule-eval.md`).
-- **FlowLog/datatoad middle layer with DD-overlapped scheduling.** Long-term
-  benefit: a richer planner architecture inspired by DD execution, recursive
-  control, WCOJ kernels, and DD's ability to keep multiple logical times in
-  flight while preserving egglog's logical schedule. The first scheduling
-  experiment passed the reachability freshness gate with no early visibility
-  violations, but scaling was mixed and synthetic barriers erased much of the
-  overlap benefit. Main blocker before trying a larger port: avoid building a
-  second full database engine before proving which egglog relations, indexes,
-  providers, schedules, timestamp/frontier gates, and invalidation events
-  actually belong outside the native backend
-  (`options/option-3-flowlog-datatoad-middle-layer.md`).
+- **FlowLog/datatoad/DD-inspired new backend.** Long-term benefit: a richer
+  backend architecture inspired by DD execution, recursive control, WCOJ
+  kernels, and DD's ability to keep multiple logical times in flight while
+  preserving egglog's logical schedule. The first scheduling experiment passed
+  the reachability freshness gate with no early visibility violations. The
+  parallel follow-up gates downgrade the adapter path, not the single-owner
+  backend path: exactness passes by respecting rebuild/action/scheduler/container
+  boundaries, and the next experiment must show a new backend owning those
+  boundaries directly. WCOJ runtime data is still missing
+  (`options/option-3-new-backend.md`).
 - **Proof/term encoding to DD.** Long-term benefit: a concrete relational
   specification for equality maintenance and proof experiments. Main blocker
   before trying: show that generated UF/view/rebuild tables can be made much
@@ -327,12 +347,11 @@ Evidence that would clarify the choice:
   and whether native action handoff creates stale or duplicate-heavy match
   streams. It also needs the scheduled reachability witness to pass with
   per-rule freshness.
-- Option 3 now needs the next gate after the small DD-overlap experiment:
-  measure whether native actions, rebuild invalidation, custom schedulers, and
-  equality/container refresh force barriers that remove the observed scheduling
-  benefit. It still needs a small rule-IR sketch showing whether DD
-  arrangements or datatoad/dataflow-join WCOJ kernels can be reused without
-  maintaining a second full index universe.
+- Option 3's next gate is a replacement-backend vertical slice, not another
+  adapter experiment. It needs row-level rebuild/container counters, trace
+  memory and compaction metrics, a mounted WCOJ dataset, and one single-owner
+  slice proving that moved responsibilities do not call back into native
+  `core-relations`.
 - Proof/term encoding needs measurements of proof/term encoding overhead on
   small constructor/rebuild tests, plus a concrete story for containers and
   presorts.
@@ -358,14 +377,17 @@ Evidence that would clarify the choice:
   recreates the blow-up.
 - Classify 3-5 real egglog rules as acyclic, cyclic, repeated-variable, or
   equality-heavy, then compare source-order binary joins with a WCOJ-style
-  operator on at least one cyclic pattern.
-- Prototype one FlowLog/DD-style overlapped physical schedule for an egglog
-  ruleset and compare it with current stop/start bulk iteration on throughput,
-  progress traffic, retained trace state, rebuild invalidation volume, final
-  saturation, and whether later-iteration matches/actions are gated until the
-  logical schedule permits them.
+  operator on at least one cyclic pattern. The first classification pass is
+  complete; the WCOJ runtime comparison still needs graph input data.
+- Build the Option 3 replacement-backend vertical slice: one small
+  relation/function-table universe, per-rule freshness, one
+  rebuild/canonicalization event, one dirty-refresh-style invalidation, one
+  scheduler materialization boundary, and step-visible comparison against native
+  egglog as the oracle.
 - Sketch the minimum custom-provider interface required for equality,
   containers, and columnar relation storage, using Ascent BYODS as the
   comparison point.
 - Trace one custom scheduler run to measure how many matches are materialized,
-  retained, filtered, and delayed before action execution.
+  retained, filtered, and delayed before action execution. The first scheduler
+  lane passed behavior/scoping tests; it still needs direct match/admission
+  counters if this becomes implementation evidence.

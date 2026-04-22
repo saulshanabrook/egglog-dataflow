@@ -1,0 +1,229 @@
+{
+  "experiment_id": "option-3",
+  "lane": "05-trace-progress",
+  "workload": "chain / fanout",
+  "command": [
+    "cargo run --release --manifest-path code/option3-overlap/Cargo.toml -- --suite scaling --json-out findings/artifacts/option-3/raw/01-schedule-overlap-scaling.json"
+  ],
+  "repo_state": {
+    "root": "/Users/saul/p/egglog-dataflow",
+    "git_head": "cd503798919131c1c8f66760cb18c561bd6cb2d2",
+    "git_dirty": true
+  },
+  "semantic_ok": true,
+  "freshness_ok": true,
+  "early_visibility_violations": 0,
+  "barrier_count": 260,
+  "barrier_reasons": [
+    "stop/start logical schedule boundary",
+    "synthetic native barrier forced overlap window to 1"
+  ],
+  "runtime_us": 577048,
+  "metrics": {
+    "key_question": "How much frontier lag and candidate flow does overlap introduce under scaling?",
+    "option_implication": "Frontier lag is bounded in the current harness, but trace memory and compaction still need instrumentation.",
+    "performance_summary": "60 scaling runs, max runtime 577048 us, max frontier lag 3 tasks, stale candidates 0.",
+    "scaling_summary": {
+      "records": 60,
+      "semantic_ok_all": true,
+      "freshness_ok_all": true,
+      "early_visibility_violations_total": 0,
+      "candidate_count_range": [
+        24,
+        8256
+      ],
+      "duplicate_stale_candidate_count_total": 0,
+      "max_frontier_lag_tasks": 3,
+      "barrier_count_histogram": {
+        "0": 24,
+        "2": 6,
+        "3": 12,
+        "19": 2,
+        "20": 4,
+        "67": 2,
+        "68": 4,
+        "259": 2,
+        "260": 4
+      },
+      "runtime_us_range": [
+        362,
+        577048
+      ]
+    },
+    "frontier_lag_samples": [
+      {
+        "workload": "chain",
+        "scale": 128,
+        "workers": 4,
+        "mode": "dd-overlap",
+        "overlap_window": 4,
+        "candidate_count": 8256,
+        "duplicate_stale_candidate_count": 0,
+        "barrier_count": 0,
+        "runtime_us": 486140,
+        "samples": [
+          {
+            "committed_task": 0,
+            "issued_through_task": 3,
+            "lag_tasks": 3,
+            "visible_frontier": [
+              3
+            ]
+          },
+          {
+            "committed_task": 1,
+            "issued_through_task": 4,
+            "lag_tasks": 3,
+            "visible_frontier": [
+              4
+            ]
+          },
+          {
+            "committed_task": 2,
+            "issued_through_task": 5,
+            "lag_tasks": 3,
+            "visible_frontier": [
+              5
+            ]
+          },
+          {
+            "committed_task": 17,
+            "issued_through_task": 20,
+            "lag_tasks": 3,
+            "visible_frontier": [
+              20
+            ]
+          },
+          {
+            "committed_task": 18,
+            "issued_through_task": 21,
+            "lag_tasks": 3,
+            "visible_frontier": [
+              21
+            ]
+          },
+          {
+            "committed_task": 19,
+            "issued_through_task": 22,
+            "lag_tasks": 3,
+            "visible_frontier": [
+              22
+            ]
+          }
+        ]
+      },
+      {
+        "workload": "fanout",
+        "scale": 128,
+        "workers": 4,
+        "mode": "dd-overlap",
+        "overlap_window": 4,
+        "candidate_count": 384,
+        "duplicate_stale_candidate_count": 0,
+        "barrier_count": 0,
+        "runtime_us": 787,
+        "samples": [
+          {
+            "committed_task": 0,
+            "issued_through_task": 2,
+            "lag_tasks": 2,
+            "visible_frontier": [
+              3
+            ]
+          },
+          {
+            "committed_task": 1,
+            "issued_through_task": 2,
+            "lag_tasks": 1,
+            "visible_frontier": [
+              4
+            ]
+          },
+          {
+            "committed_task": 2,
+            "issued_through_task": 2,
+            "lag_tasks": 0,
+            "visible_frontier": [
+              5
+            ]
+          }
+        ]
+      },
+      {
+        "workload": "chain",
+        "scale": 128,
+        "workers": 1,
+        "mode": "dd-overlap",
+        "overlap_window": 2,
+        "candidate_count": 8256,
+        "duplicate_stale_candidate_count": 0,
+        "barrier_count": 0,
+        "runtime_us": 314270,
+        "samples": [
+          {
+            "committed_task": 0,
+            "issued_through_task": 1,
+            "lag_tasks": 1,
+            "visible_frontier": [
+              3
+            ]
+          },
+          {
+            "committed_task": 1,
+            "issued_through_task": 2,
+            "lag_tasks": 1,
+            "visible_frontier": [
+              4
+            ]
+          },
+          {
+            "committed_task": 2,
+            "issued_through_task": 3,
+            "lag_tasks": 1,
+            "visible_frontier": [
+              5
+            ]
+          }
+        ]
+      }
+    ],
+    "worker_window_behavior": {
+      "workers1": {
+        "records": 30,
+        "window1_records": 12,
+        "window2_records": 6,
+        "window4_records": 12,
+        "native_barrier_records": 6,
+        "max_lag_by_window": {
+          "1": 0,
+          "2": 1,
+          "4": 3
+        }
+      },
+      "workers4": {
+        "records": 30,
+        "window1_records": 12,
+        "window2_records": 6,
+        "window4_records": 12,
+        "native_barrier_records": 6,
+        "max_lag_by_window": {
+          "1": 0,
+          "2": 1,
+          "4": 3
+        }
+      }
+    },
+    "trace_progress_proxy": {
+      "frontier_samples_range": [
+        3,
+        260
+      ],
+      "max_frontier_sample_count": 260,
+      "stale_candidate_total": 0
+    },
+    "limitations": [
+      "The harness does not expose trace memory, retention, or compaction counters, so frontier lag is a progress proxy only."
+    ]
+  },
+  "verdict": "pass: scaling stays semantically and freshness-correct, overlap windows 2 and 4 expose bounded logical lag without stale candidates, and the harness provides progress proxies but no direct compaction metrics."
+}

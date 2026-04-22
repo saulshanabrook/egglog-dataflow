@@ -1,0 +1,54 @@
+{
+  "experiment_id": "option-3",
+  "lane": "10-real-barrier-survival",
+  "workload": "integrated schedule, rebuild, scheduler, equality, and container lanes",
+  "command": [
+    "python3 code/option3-overlap/scripts/validate_option3_lanes.py findings/artifacts/option-3",
+    "read findings/artifacts/option-3/01-schedule-overlap.json",
+    "read findings/artifacts/option-3/03-native-action-rebuild-barriers.json",
+    "read findings/artifacts/option-3/04-equality-rebuild-invalidation.json",
+    "read findings/artifacts/option-3/05-trace-progress.json",
+    "read findings/artifacts/option-3/08-custom-scheduler-backoff.json",
+    "read findings/artifacts/option-3/09-container-dirty-refresh.json"
+  ],
+  "repo_state": {
+    "root": "/Users/saul/p/egglog-dataflow",
+    "git_head": "cd503798919131c1c8f66760cb18c561bd6cb2d2",
+    "git_dirty": true,
+    "notes": "Coordinator synthesis from validated lane artifacts."
+  },
+  "semantic_ok": true,
+  "freshness_ok": true,
+  "early_visibility_violations": 0,
+  "barrier_count": 6,
+  "barrier_reasons": [
+    "native action/rebuild regressions require rebuild-phase visibility boundaries",
+    "custom scheduler/backoff requires full match materialization and admission boundaries",
+    "synthetic native barriers in the overlap harness collapse the effective overlap window to 1"
+  ],
+  "runtime_us": null,
+  "metrics": {
+    "key_question": "Do the real-barrier results reject an adapter framing or the new-backend framing?",
+    "inputs": [
+      "01-schedule-overlap.json",
+      "03-native-action-rebuild-barriers.json",
+      "04-equality-rebuild-invalidation.json",
+      "05-trace-progress.json",
+      "08-custom-scheduler-backoff.json",
+      "09-container-dirty-refresh.json"
+    ],
+    "semantic_inputs_passed": [
+      "schedule-overlap DD modes",
+      "native action/rebuild regressions",
+      "equality/rebuild invalidation regressions",
+      "trace/progress scaling sweep",
+      "custom scheduler/backoff regressions",
+      "container dirty-refresh regressions"
+    ],
+    "overlap_survival": "partial",
+    "overlap_survival_reason": "The pure schedule lane overlaps cleanly, but native action, rebuild, container-refresh, and scheduler lanes depend on explicit visibility or materialization boundaries when native egglog remains authoritative.",
+    "performance_summary": "No integrated new-backend runtime exists yet; component runtimes are recorded in source lane artifacts. Synthetic native barriers reduce the adapter-style schedule harness to stop/start behavior.",
+    "option_implication": "Downgrade permanent middle-layer adapter duplication. Keep Option 3 open as a replacement-backend path if the next slice owns these barrier semantics without native shadow state."
+  },
+  "verdict": "exactness survives the tested native gates. The result rejects free overlap through native-authoritative barriers, but it does not reject a new backend that owns those barriers directly."
+}

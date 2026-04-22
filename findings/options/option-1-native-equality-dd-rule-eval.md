@@ -1,7 +1,24 @@
 # Option 1: Native Equality + DD/FlowLog Rule Evaluation
 
 ## Viability
-- Medium. This is the smallest credible split because egglog's frontend is already close to the needed boundary: `CoreRule` is a conjunctive-query body plus SSA-like actions, and the current backend builder separately lowers body atoms to table/primitive queries and heads to `set`/`delete`/`subsume`/`union` actions (`findings/source-notes/egglog-core-proof.md`, `repos/egglog/src/core.rs`, `repos/egglog/src/lib.rs`). DD/FlowLog fits the rule-matching, seminaive delta, arrangement, and recursive fixed-point side. The viability is not High because equality changes are not ordinary relation inserts, and seminaive freshness is rule-local under arbitrary schedules: native rebuild has value-level table rewriting, incremental/full rebuild choices, explicit rebuild-invalidation events, same-id dirty container refresh, per-rule timestamp windows, and merge hooks that must be reflected back into the dataflow input without semantic misses (`findings/source-notes/scaling-equality-saturation.md`).
+- Medium, now stronger relative to an adapter-shaped Option 3. This is the smallest
+  credible DD split because egglog's frontend is already close to the needed
+  boundary: `CoreRule` is a conjunctive-query body plus SSA-like actions, and
+  the current backend builder separately lowers body atoms to table/primitive
+  queries and heads to `set`/`delete`/`subsume`/`union` actions
+  (`findings/source-notes/egglog-core-proof.md`, `repos/egglog/src/core.rs`,
+  `repos/egglog/src/lib.rs`). DD/FlowLog fits the rule-matching, seminaive
+  delta, arrangement, and recursive fixed-point side. The Option 3 follow-up
+  lanes strengthen this split by showing that rebuild/action/scheduler/container
+  behavior still wants native, barrier-shaped ownership. The viability is not
+  High because equality changes are not ordinary relation inserts, and seminaive
+  freshness is rule-local under arbitrary schedules: native rebuild has
+  value-level table rewriting, incremental/full rebuild choices, explicit
+  rebuild-invalidation events, same-id dirty container refresh, per-rule
+  timestamp windows, and merge hooks that must be reflected back into the
+  dataflow input without semantic misses
+  (`findings/source-notes/scaling-equality-saturation.md`,
+  `findings/option-3-experiment-findings.md`).
 
 ## General Approach
 - Keep egglog's union-find, congruence/rebuild, containers, merge functions, primitive/action VM, proof/extraction ownership, and scheduler-visible run loop native. Add a DD/FlowLog-like rule-evaluation service beside the native database. At each logical schedule epoch, egglog exports canonical e-node/function relation deltas, explicit rebuild-invalidation events, and the per-rule last-run timestamp information needed for seminaive freshness. The service maintains arranged relation indexes and evaluates rule bodies to produce a stream/table of matches keyed by rule id plus bound variables. Egglog then drains those matches and runs existing native actions through the current action path, including `set`, `union`, `delete`, `subsume`, primitive calls, and failed lookup behavior. The scheduler contract stays native and must preserve full-match collection and delayed-fire semantics: collect all matches first, let the scheduler choose a subset or ordering, then fire actions after that choice. After actions, native rebuild runs and emits the next batch of canonical-id/table invalidations back to dataflow.
@@ -42,7 +59,10 @@
 
 ## Evidence To Gather
 - Implement a tiny adapter for 2-3 function tables: export canonical rows to DD, evaluate one multi-atom rule body, return substitutions, and apply existing native actions.
-- Reproduce rebuild-heavy cases including `container-rebuild.egg` and `merge-during-rebuild.egg`; verify DD receives enough invalidations to produce the same matches as native seminaive execution.
+- Reproduce rebuild-heavy cases including `container-rebuild.egg` and
+  `merge-during-rebuild.egg`; the current native regression lanes pass, so the
+  next step is verifying that DD receives enough explicit invalidations to
+  produce the same matches as native seminaive execution.
 - Add semantic-equivalence tests for rebuild, container refresh, and custom schedules, including cases where matches are fully materialized before action fire and cases where delayed-fire scheduling chooses only a subset.
 - Reproduce the scheduled reachability example from `repos/scaling-equality-saturation/egglog-new-backend.md` and verify that DD receives enough timestamp-window information to match native seminaive behavior.
 - Measure delta volume for class-id merges: number of row retractions/reinsertions and arrangement updates per native union/rebuild, especially with high parent fanout.
@@ -50,4 +70,14 @@
 - Decide and measure epoch granularity: per command, per rule batch, per rebuild phase, or per saturation iteration.
 
 ## Current Assessment
-- This option remains useful to evaluate as a hybrid prototype because it preserves the hardest egglog-specific machinery natively while testing DD/FlowLog on maintained rule indexes and incremental body matching. The first milestone should not attempt relational equality maintenance; it should prove the data-exchange contract by matching native results on rebuild/container/merge/scheduler regressions and quantifying class-id rewrite churn. If that contract is too large or too expensive, the evidence would argue against broader integration.
+- This option remains useful to evaluate as a hybrid prototype because it
+  preserves the hardest egglog-specific machinery natively while testing
+  DD/FlowLog on maintained rule indexes and incremental body matching. The
+  Option 3 follow-up lanes make this boundary more attractive than a mirrored
+  adapter: native rebuild, container refresh, and scheduler semantics pass
+  today but still look like explicit handoff barriers. The first milestone
+  should not attempt relational equality maintenance; it should prove the
+  data-exchange contract by matching native results on
+  rebuild/container/merge/scheduler regressions and quantifying class-id rewrite
+  churn. If that contract is too large or too expensive, the evidence would
+  argue against broader integration.

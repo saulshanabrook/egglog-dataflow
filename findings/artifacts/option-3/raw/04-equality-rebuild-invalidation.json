@@ -1,0 +1,41 @@
+[
+  {
+    "cmd": "cargo test -p egglog-core-relations incremental_reinsert_canonicalizes_displaced_outer_id -- --nocapture",
+    "code": 0,
+    "us": 202513,
+    "stdout_tail": [
+      "",
+      "running 1 test",
+      "test containers::tests::incremental_reinsert_canonicalizes_displaced_outer_id ... ok",
+      "",
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 52 filtered out; finished in 0.00s",
+      ""
+    ],
+    "stderr_tail": [
+      "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.14s",
+      "     Running unittests src/lib.rs (target/debug/deps/egglog_core_relations-59b098614b0aaa59)"
+    ]
+  },
+  {
+    "cmd": "cargo run -- tests/merge-during-rebuild.egg",
+    "code": 0,
+    "us": 635523,
+    "stdout_tail": [],
+    "stderr_tail": [
+      "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.07s",
+      "     Running `target/debug/egglog tests/merge-during-rebuild.egg`"
+    ]
+  },
+  {
+    "cmd": "cargo run -- --term-encoding tests/repro-small-rebuild-fail-term-encoding.egg",
+    "code": 0,
+    "us": 602533,
+    "stdout_tail": [],
+    "stderr_tail": [
+      "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.05s",
+      "     Running `target/debug/egglog --term-encoding tests/repro-small-rebuild-fail-term-encoding.egg`",
+      "[WARN ] In 1:1-14: (let @v (L 0))",
+      "    Global `@v` should start with `$`. Enable `--strict-mode` to turn this warning into an error. Suppressing additional warnings of this type."
+    ]
+  }
+]

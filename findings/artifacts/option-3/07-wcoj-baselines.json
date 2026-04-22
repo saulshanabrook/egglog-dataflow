@@ -1,0 +1,68 @@
+{
+  "experiment_id": "option-3",
+  "lane": "07-wcoj-baselines",
+  "workload": "WCOJ baseline lanes for triangle, four-clique, q6, and q7 motifs",
+  "command": [
+    "cargo check --manifest-path repos/dataflow-join/Cargo.toml --examples",
+    "cargo run --manifest-path repos/dataflow-join/Cargo.toml --example triangles-single -- --help",
+    "cargo run --manifest-path repos/dataflow-join/Cargo.toml --example motifs-single -- --help"
+  ],
+  "repo_state": {
+    "root": "/Users/saul/p/egglog-dataflow",
+    "git_head": "cd503798919131c1c8f66760cb18c561bd6cb2d2",
+    "git_dirty": true,
+    "notes": "No bundled graph dataset was present in repos/dataflow-join, so runtime measurements stayed blocked."
+  },
+  "semantic_ok": null,
+  "freshness_ok": null,
+  "early_visibility_violations": null,
+  "barrier_count": null,
+  "barrier_reasons": [],
+  "runtime_us": 14490000,
+  "metrics": {
+    "key_question": "Can the checked-out WCOJ examples provide runtime baselines for triangle, four-clique, q6, and q7?",
+    "option_implication": "WCOJ remains a follow-up component experiment; this checkout only proves the examples compile without a graph dataset.",
+    "limitation_summary": "Compile-only baseline; runtime probes are blocked on missing graph inputs.",
+    "limitations": [
+      "semantic/freshness/barrier fields are null because this lane is a baseline build/run probe, not an evaluation of query results.",
+      "The examples require graph input paths; without a local dataset, only compile and failure-mode evidence was measurable."
+    ],
+    "candidate_motifs": [
+      "triangle",
+      "four-clique",
+      "q6",
+      "q7"
+    ],
+    "runs": [
+      {
+        "command": "cargo check --manifest-path repos/dataflow-join/Cargo.toml --examples",
+        "status": "pass",
+        "observed": "Example suite compiled successfully after dependency resolution.",
+        "runtime_us": 14490000
+      },
+      {
+        "command": "cargo run --manifest-path repos/dataflow-join/Cargo.toml --example triangles-single -- --help",
+        "status": "blocked_missing_input",
+        "observed": "Panicked while opening the graph input file because the example treats the final positional argument as a dataset path.",
+        "runtime_us": 11240000
+      },
+      {
+        "command": "cargo run --manifest-path repos/dataflow-join/Cargo.toml --example motifs-single -- --help",
+        "status": "blocked_missing_input",
+        "observed": "Panicked on missing required filename/argument before any graph data could be loaded.",
+        "runtime_us": 12370000
+      }
+    ],
+    "static_sources": [
+      "repos/dataflow-join/examples/triangles.rs",
+      "repos/dataflow-join/examples/four-cliques.rs",
+      "repos/dataflow-join/examples/motifs-single.rs",
+      "repos/dataflow-join/README.md"
+    ],
+    "summary": {
+      "baseline_state": "compile-only baseline with blocked runtime measurement",
+      "option_implication": "The lane is ready for real triangle/four-clique/q6/q7 measurements once a local graph dataset is supplied."
+    }
+  },
+  "verdict": "pass"
+}

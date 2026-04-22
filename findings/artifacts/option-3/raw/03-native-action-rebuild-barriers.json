@@ -1,0 +1,71 @@
+{
+  "experiment_id": "option-3",
+  "lane": "03-native-action-rebuild-barriers",
+  "repo_state": {
+    "root": "/Users/saul/p/egglog-dataflow",
+    "git_head": "cd503798919131c1c8f66760cb18c561bd6cb2d2",
+    "git_dirty": true
+  },
+  "source_refs": {
+    "egglog_scheduler": "repos/egglog/src/scheduler.rs:166-240",
+    "rebuild_materialization": "repos/egglog/src/scheduler.rs:224-240",
+    "synthetic_reference": "findings/artifacts/option3-overlap.json"
+  },
+  "runs": [
+    {
+      "name": "container_rebuild",
+      "command": "cargo test -p egglog --test files container_rebuild -- --exact --nocapture",
+      "status": "pass",
+      "runtime_us": 1769000,
+      "stdout_excerpt": [
+        "extracted with cost 5: (MyVec (vec-of (Num 1) (Num 1)))",
+        "test container_rebuild ... ok"
+      ]
+    },
+    {
+      "name": "merge_during_rebuild",
+      "command": "cargo test -p egglog --test files merge_during_rebuild -- --exact --nocapture",
+      "status": "pass",
+      "runtime_us": 1726000,
+      "stdout_excerpt": [
+        "Ran schedule (repeat 1 (run)).",
+        "Checked fact (= (distance $x $y) 1) after run 1."
+      ]
+    },
+    {
+      "name": "container_fail",
+      "command": "cargo test -p egglog --test files container_fail -- --exact --nocapture",
+      "status": "pass",
+      "runtime_us": 1726000,
+      "stdout_excerpt": [
+        "first run reported num matches 2 for the rewrite pair",
+        "after the container child existed, checked fact (= $resolved (b)) passed"
+      ]
+    },
+    {
+      "name": "repro_should_saturate",
+      "command": "cargo test -p egglog --test files repro_should_saturate -- --exact --nocapture",
+      "status": "pass",
+      "runtime_us": 1669000,
+      "stdout_excerpt": [
+        "Rule (rule ((MyMap )) ...) reported num matches 1",
+        "Function MyMap has size 1"
+      ]
+    },
+    {
+      "name": "schedule_demo",
+      "command": "cargo test -p egglog --test files schedule_demo -- --exact --nocapture",
+      "status": "pass",
+      "runtime_us": 1665000,
+      "stdout_excerpt": [
+        "Checked fact (left 10)",
+        "Checked fact (right 9)",
+        "test schedule_demo ... ok"
+      ]
+    }
+  ],
+  "notes": [
+    "The native regression runs are all green.",
+    "The harness does not expose a direct early-visibility counter, so this raw record relies on the regression outcomes plus the scheduler source."
+  ]
+}
