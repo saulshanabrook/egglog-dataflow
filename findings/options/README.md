@@ -12,8 +12,10 @@ option or sub-option.
 Arbitrary scheduling with seminaive evaluation is another cross-cutting
 constraint. The scaling-equality-saturation draft shows that egglog needs
 per-rule last-run timestamps and timestamp-window scans; options that move rule
-matching must either preserve that logical freshness model exactly or introduce
-an explicitly relaxed scheduling mode.
+matching must preserve that logical freshness model unless they explicitly add
+a new relaxed schedule mode. The current Option 3 hypothesis is stronger than
+relaxation: DD may overlap physical work across logical egglog iterations while
+preserving exact schedule semantics.
 
 ## Complexity Ladder
 
@@ -21,23 +23,24 @@ an explicitly relaxed scheduling mode.
 | --- | --- | --- | --- |
 | Native improvement / borrow ideas | Preserves existing semantics while incrementally adopting WCOJ planning, provider interfaces, columnar storage, profiling, timestamp/index work, or cleaner rule IR boundaries. | Does not answer the shared-substrate motivation unless provider-style boundaries isolate reusable pieces from native-only behavior. | [Option 4](option-4-no-dd-backend-borrow-ideas.md) |
 | Exact hybrid DD rule evaluation | Tests maintained relational matching and indexing while keeping equality/rebuild/container behavior and logical schedules native. | Needs a precise delta interface for canonical-id changes, explicit rebuild invalidations, same-id dirty refresh, per-rule seminaive timestamps, scheduler match selection, match deduplication, and action handoff. | [Option 1](option-1-native-equality-dd-rule-eval.md) |
-| Option 3b: relaxed small-iteration DD scheduling | Lets DD spread work across many small overlapping physical iterations inside explicit relaxed regions. | Changes the schedule contract. It must be scoped away from programs that depend on bounded `run`, staged `saturate`, blowup control, manual stratification, or exact custom scheduler behavior. | [Option 3b](option-3b-relaxed-small-iteration-scheduling.md) |
-| Option 3a: exact FlowLog/datatoad middle layer | Could become a coherent long-term relational planner with DD execution, WCOJ-style join kernels, and schedule-aware physical planning while preserving current logical schedule semantics. | Requires a substantial new planner, index universe, recursive-control model, egglog-specific adapter, per-rule freshness model, and rebuild/equality invalidation model. | [Option 3a](option-3-flowlog-datatoad-middle-layer.md) |
+| FlowLog/datatoad middle layer with DD-overlapped scheduling | Could become a coherent long-term relational planner with DD execution, WCOJ-style join kernels, exact logical scheduling, and DD-overlapped physical execution across logical iterations. | Requires a substantial new planner, index universe, recursive-control model, egglog-specific adapter, per-rule freshness model, timestamp/frontier design, and rebuild/equality invalidation model. Native actions and custom schedulers may still force barriers. | [Option 3](option-3-flowlog-datatoad-middle-layer.md) |
 | Proof/term encoding to DD | Provides a concrete relational specification for equality, UF/view/rebuild tables, and proof-oriented experiments. | Current encoding is slow, incomplete for current egglog features, only a partial validation oracle, and incompatible with container/presort/scheduler/per-rule seminaive semantics without a native side channel. | [Option 2](option-2-proof-term-encoding-dd.md) |
 
-## Exact vs Relaxed Scheduling
+## Logical vs Physical Scheduling
 
-- Exact mode must preserve per-rule timestamp windows, custom scheduler
-  behavior, ruleset order, `run`/`saturate` boundaries, and manual
-  stratification. This is the compatibility-preserving contract for Option 1
-  and Option 3a.
-- Relaxed mode may allow backend-chosen physical order, overlapping DD
-  iterations, and a coarser or DD-friendlier timestamp policy inside explicitly
-  marked regions. This is the semantic bet behind Option 3b.
-- Relaxed mode must be scoped because existing programs may rely on bounded
-  `run`, staged `saturate`, rule ordering to control blowup or
-  nontermination, manual stratification, and full-match materialization for
-  custom schedulers.
+- Exact logical scheduling must preserve per-rule timestamp windows, custom
+  scheduler behavior, ruleset order, `run`/`saturate` boundaries, and manual
+  stratification. This is the compatibility contract for Options 1 and 3.
+- DD-overlapped physical scheduling may still preserve that contract. Timely/DD
+  can track multidimensional timestamps and frontiers, so a middle layer may be
+  able to start physical work for logical iteration `N+1` before all of
+  iteration `N` has completed, then make later results observable only when the
+  relevant frontiers prove earlier work is complete.
+- Explicitly relaxed scheduling is a fallback variant, not the main Option 3
+  hypothesis. It would need a scoped user/compiler contract because existing
+  programs may rely on bounded `run`, staged `saturate`, rule ordering to
+  control blowup or nontermination, manual stratification, and full-match
+  materialization for custom schedulers.
 
 ## Tradeoff Summary
 
@@ -49,11 +52,9 @@ an explicitly relaxed scheduling mode.
 - Exact hybrid DD rule evaluation is the smallest DD migration surface, but it
   may force egglog and DD to maintain overlapping indexes and carefully
   synchronized deltas, including per-rule freshness windows.
-- Option 3b makes the DD fit more plausible by relaxing the logical scheduling
-  contract inside scoped regions, but it is a semantic change rather than a
-  transparent backend substitution.
-- Option 3a has broad architecture upside, but it is a large system design
-  project rather than a small backend substitution, especially if it preserves
-  exact scheduling while also owning planner/runtime structure.
+- Option 3 has broad architecture upside, especially if DD-overlapped physical
+  scheduling improves throughput without changing egglog's logical schedule
+  semantics. It is still a large system design project rather than a small
+  backend substitution.
 - Proof/term encoding is a clear specification path, but it currently looks too
   expensive and feature-incomplete for production lowering.

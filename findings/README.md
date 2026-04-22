@@ -62,16 +62,13 @@ Current option tradeoff map, ordered by increasing complexity and disruption:
   keeping equality/rebuild native, but depends on a difficult delta contract
   between egglog and DD, including explicit rebuild invalidation, per-rule
   seminaive freshness, and scheduler match selection.
-- [Option 3b: relaxed small-iteration scheduling](options/option-3b-relaxed-small-iteration-scheduling.md)
-  asks whether explicitly relaxed regions could replace egglog's bulk physical
-  ruleset iteration with many smaller DD iterations. It may fit DD better, but
-  it changes the schedule contract and must be scoped away from programs that
-  rely on exact `run`, staged `saturate`, blowup control, manual
-  stratification, or custom scheduler behavior.
-- [Option 3a: exact FlowLog/datatoad middle layer](options/option-3-flowlog-datatoad-middle-layer.md)
-  has broad long-term planning upside, but requires a large new middle layer,
-  egglog-specific adapter, index layout, invalidation model, and exact
-  schedule/freshness model before the equality/rebuild boundary is proven.
+- [Option 3: FlowLog/datatoad middle layer with DD-overlapped scheduling](options/option-3-flowlog-datatoad-middle-layer.md)
+  has broad long-term planning upside and a stronger scheduling hypothesis than
+  the earlier separate scheduling refinement: preserve egglog's exact logical schedule, but let DD
+  overlap physical work across logical iterations using timestamp/frontier
+  tracking. It still requires a large new middle layer, egglog-specific adapter,
+  index layout, invalidation model, and evidence that native actions, rebuild,
+  and custom schedulers do not collapse the overlap back into barriers.
 - Proof/term encoding gives a clear relational equality specification, but
   current evidence raises overhead concerns and cannot validate the full
   Python/container/scheduler frontend surface.

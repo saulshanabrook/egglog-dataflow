@@ -3,6 +3,7 @@
 ## Sources Read
 - `repos/scaling-equality-saturation/egglog-new-backend.md`: Eli Rosenthal's June 2025 draft on egglog's backend design, with emphasis on scheduling, seminaive evaluation, parallelism, table layout, BYODS, Free Join, and benchmark caveats.
 - `messages/eli-scheduling-seminaive.md`: local preservation of Eli's note that supporting both seminaive evaluation and arbitrary schedules is a major egglog design constraint.
+- `messages/eli-dd-overlapped-scheduling.md`: local preservation of Eli's clarification that DD may overlap physical iteration work without changing egglog's logical schedule semantics.
 - `https://gist.github.com/ezrosent/80190c70245632388f536fa259ec54b8`: public gist copy of the same draft; the public gist comments endpoint returned an empty list when checked, so no separate public gist comments were integrated.
 
 ## Key Findings
@@ -16,16 +17,17 @@
 - Egglog's rule matcher is closer to Free Join than plain binary joins. The draft describes lazy subsets, cached hash indexes, fused scans, batching, vectorized actions, morsel-driven parallelism, and dynamic variable ordering. It also says binary and bushy plans are future work because many queries would be faster with traditional planning.
 - The benchmark section is useful but explicitly provisional. It reports good but non-linear scaling to 16 cores, identifies serial union-find insertion as a bottleneck in the math benchmark, and warns that some numbers use unsubmitted low-level optimizations.
 - The draft explicitly leaves Timely/Differential rehosting as future work: those systems appear to generalize what egglog can do, but that claim still needs confirmation against egglog's scheduling, timestamp, equality, and table-interface constraints.
+- Eli's later clarification changes the interpretation of "small-iteration" scheduling. The interesting DD hypothesis is not primarily semantic relaxation; it is that DD's multidimensional time/frontier tracking may let physical work for iteration `N+1` start before iteration `N` is fully complete, while still withholding or correcting later results so egglog's logical schedule semantics are preserved (`messages/eli-dd-overlapped-scheduling.md`, `findings/source-notes/differential-timely.md`).
 
 ## Relevance To The Main Objective
-- This source strengthens the case that a DD/FlowLog backend must model logical scheduling as a first-class interface. It is not enough to preserve final saturated results for all-rules-at-once runs; exact backend modes must preserve per-rule freshness under arbitrary user schedules, while relaxed modes must explicitly change and scope that contract.
+- This source strengthens the case that a DD/FlowLog backend must model logical scheduling as a first-class interface. It is not enough to preserve final saturated results for all-rules-at-once runs; exact backend modes must preserve per-rule freshness under arbitrary user schedules. DD-overlapped physical execution may still be possible if timestamp/frontier tracking keeps that logical contract intact.
 - It weakens any design that treats seminaive evaluation as a generic Datalog feature already solved by DD/FlowLog. Egglog's seminaive semantics depend on per-rule last-run timestamps and efficient timestamp-window scans.
 - It strengthens the native-improvement and provider-boundary arguments: the current backend already embodies several substrate-like ideas, including incremental timestamps, maintained indexes, staged mutation, dynamic table providers, rebuild hooks, and parallel bulk execution.
 
 ## Likely Blockers
 - DD timestamp/progress design must be reconciled with egglog's per-rule logical timestamps. A backend cannot collapse many logical rule executions into one coarse time if that loses rule-local freshness, but one dataflow time per tiny physical task may create too much progress and trace overhead.
 - A DD/FlowLog rule evaluator needs efficient timestamp-window access. If DD arrangements are keyed only by value or join attributes, preserving egglog seminaive behavior may require additional time-keyed arrangements or an auxiliary freshness index.
-- Small-iteration physical scheduling could conflict with logical seminaive windows. In exact modes, splitting a ruleset into many DD tasks is valid only if it produces the same facts each rule would see under the user-visible schedule. In Option 3b, the same idea becomes plausible only as an explicitly relaxed region with its own schedule contract.
+- Small-iteration physical scheduling could conflict with logical seminaive windows. The current Option 3 hypothesis is that DD frontiers can make this exact rather than relaxed: splitting a ruleset into many DD tasks is valid only if later-iteration work remains observationally hidden or correctable until each rule sees exactly the facts it would see under the user-visible schedule.
 - Rehosting too much of the current backend risks duplicating existing table-provider, timestamp, rebuild, and mutation-buffer machinery rather than replacing it with a simpler shared substrate.
 - Current benchmark evidence is not enough to compare against DD/FlowLog. It is provisional, limited to available workloads, and includes unsubmitted low-level optimizations.
 
@@ -40,7 +42,7 @@
 - Reproduce the scheduled reachability example from the draft in native egglog and include it as a regression for any DD/FlowLog rule-evaluation prototype.
 - Measure the cost of preserving per-rule timestamp windows in a DD design: number of arrangements, trace times, progress messages, and retained records.
 - Compare DD value-keyed arrangements against native timestamp-ordered hash tables on one rule that needs both keyed lookup and timestamp-window slicing.
-- Measure whether Option 3a small-iteration scheduling can preserve the same per-rule freshness windows, and whether Option 3b relaxed small-iteration scheduling can improve throughput or memory for programs that accept a weaker schedule contract.
+- Measure whether Option 3 DD-overlapped scheduling can preserve the same per-rule freshness windows while improving throughput or memory. Only if that fails should an explicitly relaxed schedule mode be considered as a separate semantic extension.
 - Compare native Free Join with binary/bushy planning on a few real egglog rule bodies before assuming DD binary joins or WCOJ kernels are the right default.
 
 ## Confidence

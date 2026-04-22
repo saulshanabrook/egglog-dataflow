@@ -90,6 +90,9 @@ implementation trail yet.
 - How should a backend preserve per-rule seminaive freshness when different
   rulesets run at different times and facts that are globally stable are still
   new to a rule that has not run recently?
+- Can DD/Timely multidimensional timestamps and frontiers overlap physical work
+  across logical egglog iterations without changing egglog-visible schedule
+  semantics?
 - Can streaming worst-case optimal joins, columnar layouts, FlowLog-style
   planning, or datatoad-style execution improve egglog's relational e-matching?
 - What is the right boundary between native egglog rebuilding and DD-backed rule
@@ -242,6 +245,7 @@ passes. For the current consolidated conclusion, read `synthesis.md`.
 | `../messages/oct-15-2024-zulip.md` | Main design discussion between Frank McSherry, Saul Shanabrook, Eli Rosenthal, Max Willsey, Oliver Flatt, and others. Important topics: an EqSat-in-Differential prototype, whether DD can express union-find and congruence closure, streaming WCOJ as semi-naive e-matching, equality retractions from changing e-class labels, nested scopes, contextual equality, multiple outputs, and analysis stratification. |
 | `../messages/dec-17-2025-slack.md` | Follow-up notes on FlowLog and datatoad. Important topics: FlowLog on DD, columnar representation, spreading work across many small iterations for DD parallelism, DD's nested fixed points as a possible match for egglog's outer rule loop plus inner congruence closure, lattice timestamps, arbitrary schedules, and the question of adding custom tables such as union-finds or containers. |
 | `../messages/eli-scheduling-seminaive.md` | Local preservation of Eli's comment pointing to the "Scheduling and Semi-Naive" section of the scaling equality saturation draft. Important topic: supporting both seminaive evaluation and arbitrary schedules is a major egglog design constraint. |
+| `../messages/eli-dd-overlapped-scheduling.md` | Local preservation of Eli's clarification that DD may overlap physical iteration work using multidimensional time/frontiers without changing egglog's logical scheduling semantics. Important topic: Option 3's scheduling upside should be exact logical scheduling with overlapped physical execution, not relaxed semantics by default. |
 
 ### Vendored Repositories
 
@@ -253,7 +257,7 @@ passes. For the current consolidated conclusion, read `synthesis.md`.
 | `../repos/egglog-experimental` | `egraphs-good/egglog-experimental`, `main`, `eae9570` | Experimental extensions / standard-library-like layer on top of core egglog. Relevant features include `for`, `with-ruleset`, rationals, dynamic cost models, custom `run-with` schedulers, `get-size!`, and multi-extraction. Real workloads may depend on this surface. |
 | `../repos/egglog-tutorial` | `egraphs-good/egglog-tutorial`, `main`, `4ca08d2` | Compact examples for the language surface: basics, Datalog, analyses, scheduling, cost models, extraction, and a linear algebra compiler case study. Useful for calibrating small examples before attempting full egglog programs. |
 | `../repos/differential-dataflow` | `TimelyDataflow/differential-dataflow`, `master`, `1f348abd` | The target incremental dataflow framework. Key areas: `differential-dataflow/src/` for collection operators, `mdbook/` for conceptual docs, `dogsdogsdogs/` for advanced join patterns, `interactive/` for an interpreted DD IR, and `doop/` for a Datalog-like workload. |
-| `../repos/timely-dataflow` | `TimelyDataflow/timely-dataflow`, `master`, `b4e5ef9b` | The lower-level runtime under Differential Dataflow. Relevant for progress tracking, cyclic dataflows, scheduling, communication, container support, worker execution, and timestamp behavior. |
+| `../repos/timely-dataflow` | `TimelyDataflow/timely-dataflow`, `master`, `b4e5ef9b` | The lower-level runtime under Differential Dataflow. Relevant for progress tracking, cyclic dataflows, scheduling, communication, container support, worker execution, timestamp/frontier behavior, nested scopes, and product timestamps. |
 | `../repos/flowlog` | `flowlog-rs/flowlog`, `main`, `83f3ae4` | The closest architecture study for compiling Datalog to Timely / Differential. Its crates split the pipeline into parser, stratifier, catalog, optimizer, planner, compiler, common utilities, and profiler. This is the main source for Datalog-specific planning on top of DD. |
 | `../repos/ascent` | `s-arash/ascent`, `master`, `f7b4fa4` | Embedded Rust logic programming system. Relevant for lattices, parallel Datalog, aggregation, and BYODS ("Bring Your Own Data Structures") with union-find-backed relation providers. |
 | `../repos/dynamic-datalog` | `frankmcsherry/dynamic-datalog`, `master`, `0fca831` | Benchmark and comparison material for dynamic Datalog engines. Includes CRDT, DOOP, and GALEN workloads, with hand-written Differential implementations under `differential-dataflow/`. |
@@ -425,6 +429,10 @@ added only when a research question needs them:
 - Egglog schedules are richer than "run all rules to a single fixed point". Any
   prototype should first show how arbitrary schedules map to DD loops while
   preserving per-rule seminaive timestamp windows.
+- The current Option 3 scheduling hypothesis is not semantic relaxation by
+  default. A prototype should test whether DD frontiers can overlap physical
+  work across logical egglog iterations while preserving egglog-visible schedule
+  boundaries.
 - Relational e-matching and streaming WCOJ line up conceptually, but rebuilding
   and changing e-class labels create deltas that must be handled explicitly.
 - Higher-level container operations are partly a way to avoid pairwise or

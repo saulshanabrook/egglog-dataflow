@@ -24,9 +24,9 @@ Evidence to continue:
 - A DD/FlowLog rule-evaluation prototype preserves egglog's per-rule seminaive
   freshness under arbitrary user schedules, including rules that have not run
   since older facts became stable globally.
-- A scoped relaxed scheduling mode can be specified clearly enough to separate
-  schedule-insensitive regions from programs that require exact `run`,
-  `saturate`, ruleset order, or custom scheduler behavior.
+- A FlowLog/DD middle-layer prototype can overlap physical work across logical
+  egglog iterations while preserving exact logical schedule semantics, using
+  DD/Timely timestamp and frontier tracking.
 - A provider-style boundary can separate ordinary rule relations from
   equality/container/rebuild-sensitive relations without erasing the maintenance
   benefit of the shared substrate.
@@ -45,10 +45,9 @@ Evidence to stop:
 - Preserving arbitrary schedules requires per-rule timestamp-window indexes or
   DD traces that are as complex or expensive as the native timestamp-ordered
   tables.
-- Relaxed scheduling cannot be scoped cleanly: either too many existing
-  programs depend on exact scheduling, or the relaxed mode changes the language
-  enough to become a different system rather than a backend/substrate
-  replacement.
+- DD-overlapped execution collapses back into stop/start barriers because
+  rebuild, native actions, custom schedulers, or per-rule freshness require
+  every logical iteration to finish before useful later work can proceed.
 
 ## Arguments For
 
@@ -114,23 +113,32 @@ Evidence to stop:
   container, scheduler, presort, primitive, and custom frontend surface
   (`source-notes/egglog-core-proof.md`, `source-notes/containers-frontends.md`).
 
-## Exact vs Relaxed Scheduling
+## Logical vs Physical Scheduling
 
-Exact mode preserves today's egglog schedule contract. A DD/FlowLog-backed
-design in exact mode must preserve per-rule timestamp windows, custom scheduler
-behavior, bounded `run`, staged `saturate`, ruleset order, and manual
-stratification. This is the compatibility-preserving assumption behind the
-exact hybrid rule-evaluation path and Option 3a
+The corrected scheduling frame separates egglog's logical schedule from the
+backend's physical execution schedule. Exact logical scheduling preserves
+per-rule timestamp windows, custom scheduler behavior, bounded `run`, staged
+`saturate`, ruleset order, and manual stratification. A DD/FlowLog-backed design
+that claims compatibility must preserve those observations
 (`options/option-1-native-equality-dd-rule-eval.md`,
-`options/option-3-flowlog-datatoad-middle-layer.md`).
+`options/option-3-flowlog-datatoad-middle-layer.md`,
+`source-notes/scaling-equality-saturation.md`).
 
-Relaxed mode would be a scoped semantic change. It may allow backend-chosen
-physical order, overlapping DD iterations, and a coarser or DD-friendlier
-timestamp policy inside explicitly marked regions. This could make DD a better
-fit for some workloads, but it cannot silently replace the existing scheduler:
-programs may rely on bounded `run`, staged `saturate`, blowup control, manual
-stratification, or full-match materialization for custom schedulers
-(`options/option-3b-relaxed-small-iteration-scheduling.md`).
+DD-overlapped physical scheduling is different from semantic relaxation. Timely
+supports nested/product timestamps and frontiers; DD examples explicitly show
+multiple input rounds in flight to improve throughput without changing the
+computation's output, apart from batching of observed changes
+(`source-notes/differential-timely.md`, `messages/eli-dd-overlapped-scheduling.md`).
+The Option 3 hypothesis is that a middle layer can use this machinery to start
+physical work for logical iteration `N+1` before all of iteration `N` has
+finished, then gate visibility of later matches/actions until frontiers prove
+the required earlier work is complete.
+
+Explicitly relaxed scheduling remains only a fallback variant. It may still be
+worth studying if exact overlap is too constrained, but it would require a
+separate scoped contract because existing programs may rely on bounded `run`,
+staged `saturate`, blowup control, manual stratification, or full-match
+materialization for custom schedulers.
 
 ## Backend Boundary Options
 
@@ -163,33 +171,25 @@ ranking.
      scheduler semantics, duplicate/stale matches, and action handoff
      (`options/option-1-native-equality-dd-rule-eval.md`).
 
-3. **Option 3b: relaxed small-iteration DD scheduling**
-   - Introduce scoped relaxed regions where the backend can split one logical
-     region into many smaller DD iterations or delta tasks and choose physical
-     order more freely.
-   - Potential benefit: may fit DD/Timely better than large ruleset batches by
-     enabling overlapping work, smaller deltas, and friendlier timestamp
-     policy.
-   - Main blocker: it changes the schedule contract and must be scoped away
-     from programs that rely on exact `run`, staged `saturate`, blowup control,
-     manual stratification, action ordering, or custom scheduler behavior
-     (`options/option-3b-relaxed-small-iteration-scheduling.md`).
-
-4. **Option 3a: exact FlowLog/datatoad middle layer**
+3. **FlowLog/datatoad middle layer with DD-overlapped scheduling**
    - Build or adapt an intermediate relational planner with DD execution,
      datatoad/WCOJ operators for selected joins, and egglog-specific operators
-     for rebuild/equality deltas, while preserving current logical schedule
-     semantics.
+     for rebuild/equality deltas.
+   - Preserve current logical schedule semantics while letting DD overlap
+     physical work across logical iterations when timestamp/frontier tracking
+     proves later work cannot become visible too early.
    - Potential benefit: could support a long-term relational architecture using
      FlowLog-like planner structure and datatoad/dataflow-join-style join
-     kernels between the frontend and runtime.
+     kernels between the frontend and runtime, while exposing a DD-specific
+     parallelism benefit that egglog's stop/start execution does not currently
+     have.
    - Main blocker: it requires a substantial new planner, index model,
-     recursive-control story, egglog-specific adapter, exact schedule/freshness
-     model, and equality/rebuild invalidation model before the smaller
-     substrate boundary is proven
+     recursive-control story, egglog-specific adapter, timestamp/frontier
+     design, exact schedule/freshness model, and equality/rebuild invalidation
+     model before the smaller substrate boundary is proven
      (`options/option-3-flowlog-datatoad-middle-layer.md`).
 
-5. **Proof/term encoding to DD**
+4. **Proof/term encoding to DD**
    - Use egglog's proof/term encoding as a relational specification of equality
      maintenance, then lower those generated relations to DD.
    - Potential benefit: gives a concrete relational account of UF/view/rebuild
@@ -230,13 +230,16 @@ That means any exact DD/FlowLog option that owns rule matching must preserve
 per-rule freshness windows. It can implement them with DD timestamps, with data
 columns plus arrangements, or by keeping the native timestamp-ordered table as a
 provider, but it cannot treat seminaive evaluation as a solved generic Datalog
-optimization. A relaxed scheduling option can avoid exact per-rule freshness
-inside scoped regions only by making that semantic relaxation explicit and
-checking that the program is eligible. The same source also strengthens Option
-4 as a baseline: the current backend already contains several
-database-engineering ideas a migration would need to replace or reuse,
-including staged mutation, timestamp-ordered hash tables, provider hooks, Free
-Join, dynamic variable ordering, and parallel bulk execution.
+optimization. Eli's later clarification changes the physical-scheduling
+interpretation: DD may still overlap work for later logical iterations while
+preserving these logical windows, because multidimensional time and frontiers
+can track when earlier work is actually complete
+(`messages/eli-dd-overlapped-scheduling.md`, `source-notes/differential-timely.md`).
+The same source also strengthens Option 4 as a baseline: the current backend
+already contains several database-engineering ideas a migration would need to
+replace or reuse, including staged mutation, timestamp-ordered hash tables,
+provider hooks, Free Join, dynamic variable ordering, and parallel bulk
+execution.
 
 ## Current Assessment
 
@@ -278,19 +281,13 @@ much semantic and architectural change the project is willing to consider.
   canonical ids, rebuild invalidation, same-id dirty refresh, per-rule seminaive
   freshness, scheduler match selection, and action handoff
   (`options/option-1-native-equality-dd-rule-eval.md`).
-- **Option 3b: relaxed small-iteration DD scheduling.** Long-term benefit: a
-  potentially better fit for DD by allowing many smaller overlapping physical
-  iterations inside explicit relaxed regions. Main blocker before trying:
-  specify the relaxed contract and classify which real schedules are eligible,
-  because exact `run`, staged `saturate`, blowup control, manual
-  stratification, and custom scheduler behavior may need exact mode
-  (`options/option-3b-relaxed-small-iteration-scheduling.md`).
-- **Option 3a: exact FlowLog/datatoad middle layer.** Long-term benefit: a
-  richer planner architecture inspired by DD execution, recursive control, and
-  WCOJ kernels behind egglog's frontend while preserving current scheduling
-  semantics. Main blocker before trying: avoid building a second full database
-  engine before proving which egglog relations, indexes, providers, schedules,
-  and invalidation events actually belong outside the native backend
+- **FlowLog/datatoad middle layer with DD-overlapped scheduling.** Long-term
+  benefit: a richer planner architecture inspired by DD execution, recursive
+  control, WCOJ kernels, and DD's ability to keep multiple logical times in
+  flight while preserving egglog's logical schedule. Main blocker before
+  trying: avoid building a second full database engine before proving which
+  egglog relations, indexes, providers, schedules, timestamp/frontier gates, and
+  invalidation events actually belong outside the native backend
   (`options/option-3-flowlog-datatoad-middle-layer.md`).
 - **Proof/term encoding to DD.** Long-term benefit: a concrete relational
   specification for equality maintenance and proof experiments. Main blocker
@@ -305,16 +302,16 @@ Evidence that would clarify the choice:
 - Native improvement needs evidence that borrowed planning/profiling/provider
   ideas can address important egglog workloads well enough that the
   shared-substrate migration is not worth the cost.
-- Exact hybrid DD rule evaluation needs data on whether rebuild invalidation causes near-full
-  retraction/reinsertion into DD on realistic equality merges, and whether
-  native action handoff creates stale or duplicate-heavy match streams. It also
-  needs the scheduled reachability witness to pass with per-rule freshness.
-- Option 3b needs evidence that relaxed small DD iterations improve parallel
-  throughput or memory, plus a schedule classification showing where the
-  relaxed contract is acceptable and where exact mode is required.
-- Option 3a needs a small rule-IR sketch showing whether DD arrangements or
+- Exact hybrid DD rule evaluation needs data on whether rebuild invalidation
+  causes near-full retraction/reinsertion into DD on realistic equality merges,
+  and whether native action handoff creates stale or duplicate-heavy match
+  streams. It also needs the scheduled reachability witness to pass with
+  per-rule freshness.
+- Option 3 needs a small rule-IR sketch showing whether DD arrangements or
   datatoad/dataflow-join WCOJ kernels can be reused without maintaining a
-  second full index universe while preserving exact scheduling semantics.
+  second full index universe, plus a DD-overlap experiment showing whether
+  later logical iterations can start physically before earlier iterations are
+  fully complete while preserving exact schedule semantics.
 - Proof/term encoding needs measurements of proof/term encoding overhead on
   small constructor/rebuild tests, plus a concrete story for containers and
   presorts.
@@ -341,11 +338,11 @@ Evidence that would clarify the choice:
 - Classify 3-5 real egglog rules as acyclic, cyclic, repeated-variable, or
   equality-heavy, then compare source-order binary joins with a WCOJ-style
   operator on at least one cyclic pattern.
-- Prototype one relaxed FlowLog/DD-style small-iteration schedule for an
-  eligible egglog ruleset and compare it with current bulk iteration on
-  throughput, progress traffic, retained trace state, rebuild invalidation
-  volume, final saturation, and whether the exact/relaxed contract boundary is
-  clear.
+- Prototype one FlowLog/DD-style overlapped physical schedule for an egglog
+  ruleset and compare it with current stop/start bulk iteration on throughput,
+  progress traffic, retained trace state, rebuild invalidation volume, final
+  saturation, and whether later-iteration matches/actions are gated until the
+  logical schedule permits them.
 - Sketch the minimum custom-provider interface required for equality,
   containers, and columnar relation storage, using Ascent BYODS as the
   comparison point.
