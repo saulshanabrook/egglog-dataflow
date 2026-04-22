@@ -18,6 +18,11 @@
 - The benchmark section is useful but explicitly provisional. It reports good but non-linear scaling to 16 cores, identifies serial union-find insertion as a bottleneck in the math benchmark, and warns that some numbers use unsubmitted low-level optimizations.
 - The draft explicitly leaves Timely/Differential rehosting as future work: those systems appear to generalize what egglog can do, but that claim still needs confirmation against egglog's scheduling, timestamp, equality, and table-interface constraints.
 - Eli's later clarification changes the interpretation of "small-iteration" scheduling. The interesting DD hypothesis is not primarily semantic relaxation; it is that DD's multidimensional time/frontier tracking may let physical work for iteration `N+1` start before iteration `N` is fully complete, while still withholding or correcting later results so egglog's logical schedule semantics are preserved (`messages/eli-dd-overlapped-scheduling.md`, `findings/source-notes/differential-timely.md`).
+- The first `code/option3-overlap` prototype reproduced the corrected scheduled
+  reachability witness as an oracle/DD test. A deliberately broken global
+  seminaive baseline missed `reachable(1, 3)`, while `dd-barrier` and
+  `dd-overlap` preserved per-rule freshness with zero early visibility
+  violations (`findings/option-3-experiments.md`).
 
 ## Relevance To The Main Objective
 - This source strengthens the case that a DD/FlowLog backend must model logical scheduling as a first-class interface. It is not enough to preserve final saturated results for all-rules-at-once runs; exact backend modes must preserve per-rule freshness under arbitrary user schedules. DD-overlapped physical execution may still be possible if timestamp/frontier tracking keeps that logical contract intact.
@@ -42,7 +47,10 @@
 - Reproduce the scheduled reachability example from the draft in native egglog and include it as a regression for any DD/FlowLog rule-evaluation prototype.
 - Measure the cost of preserving per-rule timestamp windows in a DD design: number of arrangements, trace times, progress messages, and retained records.
 - Compare DD value-keyed arrangements against native timestamp-ordered hash tables on one rule that needs both keyed lookup and timestamp-window slicing.
-- Measure whether Option 3 DD-overlapped scheduling can preserve the same per-rule freshness windows while improving throughput or memory. Only if that fails should an explicitly relaxed schedule mode be considered as a separate semantic extension.
+- Extend the Option 3 freshness test to cases with native actions, rebuild
+  invalidation, custom scheduler match selection, and equality/container refresh
+  barriers. The first reachability-only DD-overlap run preserved freshness, but
+  synthetic native barriers reduced the scheduling benefit.
 - Compare native Free Join with binary/bushy planning on a few real egglog rule bodies before assuming DD binary joins or WCOJ kernels are the right default.
 
 ## Confidence

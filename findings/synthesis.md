@@ -27,6 +27,9 @@ Evidence to continue:
 - A FlowLog/DD middle-layer prototype can overlap physical work across logical
   egglog iterations while preserving exact logical schedule semantics, using
   DD/Timely timestamp and frontier tracking.
+- The first Option 3 scheduling prototype preserved per-rule freshness and
+  gated visibility on the scheduled reachability witness while allowing up to
+  three future logical tasks in flight (`option-3-experiments.md`).
 - A provider-style boundary can separate ordinary rule relations from
   equality/container/rebuild-sensitive relations without erasing the maintenance
   benefit of the shared substrate.
@@ -133,6 +136,14 @@ The Option 3 hypothesis is that a middle layer can use this machinery to start
 physical work for logical iteration `N+1` before all of iteration `N` has
 finished, then gate visibility of later matches/actions until frontiers prove
 the required earlier work is complete.
+
+The first runnable Option 3 experiment supports the semantic part of this
+hypothesis on a small reachability workload: the broken global-seminaive model
+misses `reachable(1, 3)`, while `dd-barrier` and `dd-overlap` match the oracle
+with zero early visibility violations (`option-3-experiments.md`). The
+performance result is not decisive: overlap wins most small/medium runs, but
+large-chain and multi-worker cases are mixed, and synthetic native barriers
+collapse the setup back toward stop/start behavior.
 
 Explicitly relaxed scheduling remains only a fallback variant. It may still be
 worth studying if exact overlap is too constrained, but it would require a
@@ -253,6 +264,12 @@ rebuilding, containers, per-rule seminaive scheduling, or provider-specific
 behavior can move into that substrate without losing core egglog semantics or
 recreating the current backend complexity at a different layer.
 
+The Option 3 scheduling prototype narrows one uncertainty: per-rule seminaive
+freshness can be preserved in a DD-backed matcher for the corrected scheduled
+reachability witness. It does not settle the broader backend question because it
+does not include equality maintenance, rebuild invalidation, containers, WCOJ,
+native actions, or custom scheduler match selection.
+
 The central question for any option is whether it can move enough real
 database/runtime responsibility out of egglog to justify its long-term cost. If
 the substrate only handles a small amount of ordinary joining while egglog still
@@ -284,10 +301,13 @@ much semantic and architectural change the project is willing to consider.
 - **FlowLog/datatoad middle layer with DD-overlapped scheduling.** Long-term
   benefit: a richer planner architecture inspired by DD execution, recursive
   control, WCOJ kernels, and DD's ability to keep multiple logical times in
-  flight while preserving egglog's logical schedule. Main blocker before
-  trying: avoid building a second full database engine before proving which
-  egglog relations, indexes, providers, schedules, timestamp/frontier gates, and
-  invalidation events actually belong outside the native backend
+  flight while preserving egglog's logical schedule. The first scheduling
+  experiment passed the reachability freshness gate with no early visibility
+  violations, but scaling was mixed and synthetic barriers erased much of the
+  overlap benefit. Main blocker before trying a larger port: avoid building a
+  second full database engine before proving which egglog relations, indexes,
+  providers, schedules, timestamp/frontier gates, and invalidation events
+  actually belong outside the native backend
   (`options/option-3-flowlog-datatoad-middle-layer.md`).
 - **Proof/term encoding to DD.** Long-term benefit: a concrete relational
   specification for equality maintenance and proof experiments. Main blocker
@@ -307,11 +327,12 @@ Evidence that would clarify the choice:
   and whether native action handoff creates stale or duplicate-heavy match
   streams. It also needs the scheduled reachability witness to pass with
   per-rule freshness.
-- Option 3 needs a small rule-IR sketch showing whether DD arrangements or
-  datatoad/dataflow-join WCOJ kernels can be reused without maintaining a
-  second full index universe, plus a DD-overlap experiment showing whether
-  later logical iterations can start physically before earlier iterations are
-  fully complete while preserving exact schedule semantics.
+- Option 3 now needs the next gate after the small DD-overlap experiment:
+  measure whether native actions, rebuild invalidation, custom schedulers, and
+  equality/container refresh force barriers that remove the observed scheduling
+  benefit. It still needs a small rule-IR sketch showing whether DD
+  arrangements or datatoad/dataflow-join WCOJ kernels can be reused without
+  maintaining a second full index universe.
 - Proof/term encoding needs measurements of proof/term encoding overhead on
   small constructor/rebuild tests, plus a concrete story for containers and
   presorts.

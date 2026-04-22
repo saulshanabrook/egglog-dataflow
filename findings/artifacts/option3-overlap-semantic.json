@@ -1,0 +1,155 @@
+[
+  {
+    "workload": "mini",
+    "scale": 1,
+    "mode": "oracle",
+    "workers": 1,
+    "overlap_window": 1,
+    "native_barriers": false,
+    "semantic_equivalence": true,
+    "per_rule_freshness": true,
+    "expected_reachable_count": 3,
+    "actual_reachable_count": 3,
+    "missing_reachable_count": 0,
+    "extra_reachable_count": 0,
+    "missing_reachable_sample": [],
+    "extra_reachable_sample": [],
+    "early_visibility_violations": 0,
+    "runtime_micros": 1,
+    "candidate_count": 3,
+    "committed_row_count": 3,
+    "duplicate_stale_candidate_count": 0,
+    "frontier_lag_samples": [],
+    "barrier_count": 0,
+    "barrier_reasons": []
+  },
+  {
+    "workload": "mini",
+    "scale": 1,
+    "mode": "broken-global",
+    "workers": 1,
+    "overlap_window": 1,
+    "native_barriers": false,
+    "semantic_equivalence": false,
+    "per_rule_freshness": false,
+    "expected_reachable_count": 3,
+    "actual_reachable_count": 2,
+    "missing_reachable_count": 1,
+    "extra_reachable_count": 0,
+    "missing_reachable_sample": [
+      {
+        "x": 1,
+        "y": 3
+      }
+    ],
+    "extra_reachable_sample": [],
+    "early_visibility_violations": 0,
+    "runtime_micros": 0,
+    "candidate_count": 3,
+    "committed_row_count": 2,
+    "duplicate_stale_candidate_count": 1,
+    "frontier_lag_samples": [],
+    "barrier_count": 0,
+    "barrier_reasons": []
+  },
+  {
+    "workload": "mini",
+    "scale": 1,
+    "mode": "dd-barrier",
+    "workers": 1,
+    "overlap_window": 1,
+    "native_barriers": false,
+    "semantic_equivalence": true,
+    "per_rule_freshness": true,
+    "expected_reachable_count": 3,
+    "actual_reachable_count": 3,
+    "missing_reachable_count": 0,
+    "extra_reachable_count": 0,
+    "missing_reachable_sample": [],
+    "extra_reachable_sample": [],
+    "early_visibility_violations": 0,
+    "runtime_micros": 1323,
+    "candidate_count": 3,
+    "committed_row_count": 3,
+    "duplicate_stale_candidate_count": 0,
+    "frontier_lag_samples": [
+      {
+        "committed_task": 0,
+        "issued_through_task": 0,
+        "lag_tasks": 0,
+        "visible_frontier": [
+          3
+        ]
+      },
+      {
+        "committed_task": 1,
+        "issued_through_task": 1,
+        "lag_tasks": 0,
+        "visible_frontier": [
+          4
+        ]
+      },
+      {
+        "committed_task": 2,
+        "issued_through_task": 2,
+        "lag_tasks": 0,
+        "visible_frontier": [
+          5
+        ]
+      }
+    ],
+    "barrier_count": 3,
+    "barrier_reasons": [
+      "stop/start logical schedule boundary"
+    ]
+  },
+  {
+    "workload": "mini",
+    "scale": 1,
+    "mode": "dd-overlap",
+    "workers": 1,
+    "overlap_window": 2,
+    "native_barriers": false,
+    "semantic_equivalence": true,
+    "per_rule_freshness": true,
+    "expected_reachable_count": 3,
+    "actual_reachable_count": 3,
+    "missing_reachable_count": 0,
+    "extra_reachable_count": 0,
+    "missing_reachable_sample": [],
+    "extra_reachable_sample": [],
+    "early_visibility_violations": 0,
+    "runtime_micros": 428,
+    "candidate_count": 3,
+    "committed_row_count": 3,
+    "duplicate_stale_candidate_count": 0,
+    "frontier_lag_samples": [
+      {
+        "committed_task": 0,
+        "issued_through_task": 1,
+        "lag_tasks": 1,
+        "visible_frontier": [
+          3
+        ]
+      },
+      {
+        "committed_task": 1,
+        "issued_through_task": 2,
+        "lag_tasks": 1,
+        "visible_frontier": [
+          4
+        ]
+      },
+      {
+        "committed_task": 2,
+        "issued_through_task": 2,
+        "lag_tasks": 0,
+        "visible_frontier": [
+          5
+        ]
+      }
+    ],
+    "barrier_count": 0,
+    "barrier_reasons": []
+  }
+]

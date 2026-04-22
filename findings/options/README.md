@@ -15,7 +15,10 @@ per-rule last-run timestamps and timestamp-window scans; options that move rule
 matching must preserve that logical freshness model unless they explicitly add
 a new relaxed schedule mode. The current Option 3 hypothesis is stronger than
 relaxation: DD may overlap physical work across logical egglog iterations while
-preserving exact schedule semantics.
+preserving exact schedule semantics. The first `code/option3-overlap`
+prototype passed this semantic gate on the corrected scheduled reachability
+witness, but the scaling result is mixed and synthetic native barriers still
+threaten to collapse overlap back into stop/start execution.
 
 ## Complexity Ladder
 
@@ -23,7 +26,7 @@ preserving exact schedule semantics.
 | --- | --- | --- | --- |
 | Native improvement / borrow ideas | Preserves existing semantics while incrementally adopting WCOJ planning, provider interfaces, columnar storage, profiling, timestamp/index work, or cleaner rule IR boundaries. | Does not answer the shared-substrate motivation unless provider-style boundaries isolate reusable pieces from native-only behavior. | [Option 4](option-4-no-dd-backend-borrow-ideas.md) |
 | Exact hybrid DD rule evaluation | Tests maintained relational matching and indexing while keeping equality/rebuild/container behavior and logical schedules native. | Needs a precise delta interface for canonical-id changes, explicit rebuild invalidations, same-id dirty refresh, per-rule seminaive timestamps, scheduler match selection, match deduplication, and action handoff. | [Option 1](option-1-native-equality-dd-rule-eval.md) |
-| FlowLog/datatoad middle layer with DD-overlapped scheduling | Could become a coherent long-term relational planner with DD execution, WCOJ-style join kernels, exact logical scheduling, and DD-overlapped physical execution across logical iterations. | Requires a substantial new planner, index universe, recursive-control model, egglog-specific adapter, per-rule freshness model, timestamp/frontier design, and rebuild/equality invalidation model. Native actions and custom schedulers may still force barriers. | [Option 3](option-3-flowlog-datatoad-middle-layer.md) |
+| FlowLog/datatoad middle layer with DD-overlapped scheduling | Now has a small positive semantic result: DD-overlapped execution preserved per-rule freshness and gated visibility on reachability. Could become a coherent long-term relational planner with DD execution and WCOJ-style join kernels. | Requires a substantial new planner, index universe, recursive-control model, egglog-specific adapter, per-rule freshness model, timestamp/frontier design, and rebuild/equality invalidation model. Native actions, rebuild, and custom schedulers may still force barriers. | [Option 3](option-3-flowlog-datatoad-middle-layer.md) |
 | Proof/term encoding to DD | Provides a concrete relational specification for equality, UF/view/rebuild tables, and proof-oriented experiments. | Current encoding is slow, incomplete for current egglog features, only a partial validation oracle, and incompatible with container/presort/scheduler/per-rule seminaive semantics without a native side channel. | [Option 2](option-2-proof-term-encoding-dd.md) |
 
 ## Logical vs Physical Scheduling
@@ -35,7 +38,8 @@ preserving exact schedule semantics.
   can track multidimensional timestamps and frontiers, so a middle layer may be
   able to start physical work for logical iteration `N+1` before all of
   iteration `N` has completed, then make later results observable only when the
-  relevant frontiers prove earlier work is complete.
+  relevant frontiers prove earlier work is complete. The first prototype showed
+  this on a small reachability workload with no early visibility violations.
 - Explicitly relaxed scheduling is a fallback variant, not the main Option 3
   hypothesis. It would need a scoped user/compiler contract because existing
   programs may rely on bounded `run`, staged `saturate`, rule ordering to
@@ -52,9 +56,9 @@ preserving exact schedule semantics.
 - Exact hybrid DD rule evaluation is the smallest DD migration surface, but it
   may force egglog and DD to maintain overlapping indexes and carefully
   synchronized deltas, including per-rule freshness windows.
-- Option 3 has broad architecture upside, especially if DD-overlapped physical
-  scheduling improves throughput without changing egglog's logical schedule
-  semantics. It is still a large system design project rather than a small
-  backend substitution.
+- Option 3 has broad architecture upside, and the small scheduling prototype
+  strengthens its semantic feasibility. It is still a large system design
+  project rather than a small backend substitution, and native barriers remain
+  the next risk to measure.
 - Proof/term encoding is a clear specification path, but it currently looks too
   expensive and feature-incomplete for production lowering.

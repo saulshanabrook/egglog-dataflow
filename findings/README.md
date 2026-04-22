@@ -12,6 +12,7 @@ index for deeper conclusions, methodology, option analysis, and source notes.
 | Path | Purpose |
 | --- | --- |
 | [synthesis.md](synthesis.md) | Consolidated evidence, continue/stop criteria, and possible next evidence-gathering work. |
+| [option-3-experiments.md](option-3-experiments.md) | Runnable Option 3 scheduling-overlap experiment results and verdict. |
 | [options/README.md](options/README.md) | Tradeoff analysis of the backend boundary paths. |
 | [methodology.md](methodology.md) | Detailed research framing, scientific questions, source inventory, reading order, and design risks. |
 | [source-notes/](source-notes/) | First-pass evidence notes by source cluster. |
@@ -37,13 +38,10 @@ Current provisional assessment: no backend path has been selected. The evidence
 is strongest as a map of tradeoffs: DD/FlowLog/datatoad may help with relational
 matching and planning, while equality maintenance, rebuilding, containers,
 schedules, extension APIs, and frontend compatibility remain the main blockers
-to evaluate before committing to any implementation path. The synthesis now
-also treats provider-style relation boundaries, proof-encoding coverage,
-scheduler semantics, timestamp/compaction policy, and rebuild invalidation as
-first-class evidence gaps rather than separate review notes. Eli's
-scaling-equality-saturation draft adds a sharper scheduling constraint:
-arbitrary schedules require per-rule seminaive freshness and timestamp-window
-table access.
+to evaluate before committing to any implementation path. The first Option 3
+experiment shows that DD-overlapped physical scheduling can preserve per-rule
+freshness on the scheduled reachability witness, but synthetic native barriers
+and mixed scaling results keep Option 3 as a promising but constrained path.
 
 ## Option Tradeoff Pass
 
@@ -63,12 +61,11 @@ Current option tradeoff map, ordered by increasing complexity and disruption:
   between egglog and DD, including explicit rebuild invalidation, per-rule
   seminaive freshness, and scheduler match selection.
 - [Option 3: FlowLog/datatoad middle layer with DD-overlapped scheduling](options/option-3-flowlog-datatoad-middle-layer.md)
-  has broad long-term planning upside and a stronger scheduling hypothesis than
-  the earlier separate scheduling refinement: preserve egglog's exact logical schedule, but let DD
-  overlap physical work across logical iterations using timestamp/frontier
-  tracking. It still requires a large new middle layer, egglog-specific adapter,
-  index layout, invalidation model, and evidence that native actions, rebuild,
-  and custom schedulers do not collapse the overlap back into barriers.
+  now has a small positive semantic result: exact per-rule freshness and gated
+  visibility survived DD-overlapped physical execution on reachability. It still
+  requires a large new middle layer, egglog-specific adapter, index layout,
+  invalidation model, and evidence that native actions, rebuild, and custom
+  schedulers do not collapse the overlap back into barriers.
 - Proof/term encoding gives a clear relational equality specification, but
   current evidence raises overhead concerns and cannot validate the full
   Python/container/scheduler frontend surface.

@@ -1,21 +1,24 @@
 # Option 3: FlowLog/Datatoad Middle Layer With DD-Overlapped Scheduling
 
 ## Viability
-- Medium. This remains a large architecture path, but the scheduling story is
-  stronger than the earlier separate refinement suggested. The baseline requirement is
-  still exact egglog logical scheduling: per-rule seminaive freshness, ruleset
-  order, bounded `run`, staged `saturate`, custom scheduler behavior, and native
-  rebuild visibility must remain observationally compatible. The DD-specific
-  upside is that Timely/DD may overlap physical work across logical iterations
-  using multidimensional timestamps and frontiers, rather than forcing egglog's
-  current stop/start bulk iteration shape (`messages/eli-dd-overlapped-scheduling.md`,
+- Medium. This remains a large architecture path, but the scheduling story now
+  has a small runnable positive result. The baseline requirement is still exact
+  egglog logical scheduling: per-rule seminaive freshness, ruleset order,
+  bounded `run`, staged `saturate`, custom scheduler behavior, and native rebuild
+  visibility must remain observationally compatible. The DD-specific upside is
+  that Timely/DD can overlap physical work across logical iterations using
+  timestamps and frontiers rather than forcing egglog's current stop/start bulk
+  iteration shape (`messages/eli-dd-overlapped-scheduling.md`,
   `repos/timely-dataflow/mdbook/src/chapter_4/chapter_4_1.md:105`,
   `repos/timely-dataflow/mdbook/src/chapter_3/chapter_3_2.md:3`,
-  `repos/differential-dataflow/README.md:172`). The blocker is that this path
-  still builds a new relational compiler, adapter layer, index layout,
-  recursive-control model, timestamp/frontier design, and rebuild/equality
-  invalidation model before proving that the overlap survives egglog's native
-  actions and rebuild barriers.
+  `repos/differential-dataflow/README.md:172`). The `code/option3-overlap`
+  prototype preserves per-rule freshness on the corrected scheduled reachability
+  witness and allows future logical tasks to be issued early with zero early
+  visibility violations (`findings/option-3-experiments.md`). The blocker is
+  still that this path builds a new relational compiler, adapter layer, index
+  layout, recursive-control model, timestamp/frontier design, and
+  rebuild/equality invalidation model before proving that the overlap survives
+  egglog's native actions and rebuild barriers.
 
 ## General Approach
 - Build an egglog-specific relational IR between egglog and DD. The IR should
@@ -109,6 +112,8 @@
 - Exact-overlap risk: DD may be able to start later logical iterations early,
   but native actions, rebuild waves, merge functions, and custom schedulers may
   force frontier gates that collapse the benefit back into stop/start execution.
+  The first synthetic native-barrier probe already moved the experiment in that
+  direction (`findings/option-3-experiments.md`).
 - Timestamp/progress risk: DD can track rich multidimensional times, but Timely
   progress has overhead per timestamp. Too many physical tasks or frontiers can
   erase the expected parallelism benefit.
@@ -144,12 +149,13 @@
 - Build a tiny recursive stratum with one stable e-node input and one derived
   relation to validate enter/feedback/leave control before trying full
   saturation.
-- Prototype the DD-overlapped schedule on one ruleset: compare current
-  stop/start bulk iteration, exact non-overlapped middle-layer execution, and
-  DD-overlapped physical execution on throughput, operator utilization, progress
-  traffic, retained traces, and final semantic equivalence.
-- Include the scheduled reachability example as the minimum semantic test for
-  schedule lowering and per-rule seminaive freshness.
+- Extend the first DD-overlapped schedule prototype beyond reachability:
+  compare current stop/start bulk iteration, exact non-overlapped middle-layer
+  execution, and DD-overlapped physical execution when native actions, rebuild
+  invalidation, custom schedulers, or equality/container refresh events force
+  visibility barriers.
+- Keep the corrected scheduled reachability example as the minimum semantic
+  regression for schedule lowering and per-rule seminaive freshness.
 - Test a custom scheduler/backoff example to measure whether full-match
   materialization forces a barrier.
 - Compare the egglog-specific adapter boundary against a simpler DD/native
@@ -158,10 +164,13 @@
 
 ## Current Assessment
 - This is a coherent architecture sketch, but it is a large system design
-  project rather than a small backend substitution. The earlier split is
-  better treated as one path: exact middle-layer semantics first, then
-  DD-overlapped physical execution as the DD-specific optimization to test.
-  Explicit semantic relaxation should remain a fallback experiment, not the
-  primary claim. The first useful evidence is whether a small exact middle-layer
-  scaffold can demonstrate overlap across logical iterations without exposing
-  matches/actions before egglog's logical schedule permits them.
+  project rather than a small backend substitution. The first exact
+  middle-layer scaffold did demonstrate overlap across logical iterations
+  without exposing matches before egglog's logical schedule permits them, and it
+  preserved per-rule freshness on the corrected reachability witness. That
+  strengthens the semantic side of Option 3. It does not yet promote Option 3 to
+  the leading backend path: scaling wins were mixed, synthetic native barriers
+  reduced the benefit, and the prototype does not cover equality maintenance,
+  rebuild invalidation, containers, WCOJ, native actions, or custom scheduler
+  match selection. Explicit semantic relaxation should remain a fallback
+  experiment, not the primary claim.
