@@ -15,6 +15,7 @@ index for deeper conclusions, methodology, option analysis, and source notes.
 | [option-3-experiments.md](option-3-experiments.md) | Runnable Option 3 scheduling-overlap reproducibility log. |
 | [option-3-experiment-findings.md](option-3-experiment-findings.md) | Canonical interpretation of what the Option 3 experiments show. |
 | [experiments/option-3/README.md](experiments/option-3/README.md) | Generated ordered index of the Option 3 lane artifacts. |
+| [2026-04-29-egglog-on-gpu-meeting-prep.md](2026-04-29-egglog-on-gpu-meeting-prep.md) | Concise prep note for the April 29, 2026 egglog-on-GPU discussion. |
 | [options/README.md](options/README.md) | Tradeoff analysis of the backend boundary paths. |
 | [methodology.md](methodology.md) | Detailed research framing, scientific questions, source inventory, reading order, and design risks. |
 | [source-notes/](source-notes/) | First-pass evidence notes by source cluster. |
@@ -30,6 +31,7 @@ index for deeper conclusions, methodology, option analysis, and source notes.
 | Comparative Extension Models | `source-notes/extension-models.md` | Complete |
 | Conversations + Social Motivation | `source-notes/conversations-social.md` | Complete |
 | Scaling Equality Saturation | `source-notes/scaling-equality-saturation.md` | Complete |
+| GPU WCOJ Paper + Meeting Prep | `2026-04-29-egglog-on-gpu-meeting-prep.md` and `source-notes/datalog-wcoj-planning.md` | Complete |
 
 ## Synthesis
 

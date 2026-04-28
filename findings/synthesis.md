@@ -18,6 +18,10 @@ Evidence to continue:
 - DD arrangements or a FlowLog/datatoad-inspired planner materially improve or
   simplify e-matching-heavy workloads without requiring a private fork or an
   egglog-specific second database engine.
+- A WCOJ/GPU-oriented slice can show that SRDatalog-style flat columnar storage,
+  deterministic count/materialize allocation, and skew-aware partitioning help
+  egglog rule bodies without being swamped by equality rebuild, containers,
+  primitives, or scheduler barriers.
 - Measurements show that timestamp granularity, trace compaction, rebuild
   invalidations, and same-id dirty refresh events stay bounded on rebuild-heavy
   cases.
@@ -90,6 +94,11 @@ Evidence to stop:
   cyclic or high-arity e-matching queries than source-order binary joins, but
   they need an egglog-specific adapter, index layout, and invalidation model
   (`source-notes/datalog-wcoj-planning.md`).
+- SRDatalog is now concrete external evidence that recursive Datalog with WCOJ
+  can work well on GPUs. Its architecture combines flat sorted columns,
+  deterministic two-phase count/materialize kernels, root-level histogram skew
+  balancing, helper-relation splitting, and stream-parallel rule scheduling
+  (`source-notes/datalog-wcoj-planning.md`).
 - Ascent BYODS and `columnar` show that custom relation/storage providers are a
   legitimate design pattern for logic systems. Provider-style boundaries are a
   cross-cutting architecture axis for preserving specialized equality/container
@@ -110,6 +119,11 @@ Evidence to stop:
 - FlowLog's current optimizer is not enough for egglog by itself: the inspected
   code still has source-order left-deep planning, so robust e-matching would need
   extra planner work (`source-notes/datalog-wcoj-planning.md`).
+- SRDatalog strengthens the WCOJ case, but it does not solve egglog's full
+  backend problem. The evaluated core is recursive Datalog, not equality
+  saturation with union-find, rebuild retimestamping, containers/primitives,
+  proof/term encoding, arbitrary logical schedules, and custom scheduler
+  admission (`source-notes/datalog-wcoj-planning.md`).
 - A custom-provider design may preserve performance but weaken the benefit of
   moving to DD if most hard behavior remains egglog-specific
   (`source-notes/extension-models.md`).
@@ -278,10 +292,14 @@ than as a prescriptive implementation queue.
 
 The source evidence supports DD/FlowLog/datatoad as plausible references or
 substrates for maintained relational matching, arrangements, and maybe
-WCOJ-style planning. It does not yet show that all equality maintenance,
-rebuilding, containers, per-rule seminaive scheduling, or provider-specific
-behavior can move into that substrate without losing core egglog semantics or
-recreating the current backend complexity at a different layer.
+WCOJ-style planning. The SRDatalog paper makes the WCOJ/GPU side stronger than
+the earlier local compile-only evidence, but it also narrows the remaining
+question: can those join/storage/scheduling techniques survive egglog's
+union-find, rebuild, containers/primitives, and schedule semantics? The current
+repo does not yet show that all equality maintenance, rebuilding, containers,
+per-rule seminaive scheduling, or provider-specific behavior can move into that
+substrate without losing core egglog semantics or recreating the current backend
+complexity at a different layer.
 
 The Option 3 experiment suite narrows several uncertainties: per-rule seminaive
 freshness can be preserved in a DD-backed matcher for the corrected scheduled
@@ -329,7 +347,9 @@ much semantic and architectural change the project is willing to consider.
   parallel follow-up gates downgrade the adapter path, not the single-owner
   backend path: exactness passes by respecting rebuild/action/scheduler/container
   boundaries, and the next experiment must show a new backend owning those
-  boundaries directly. WCOJ runtime data is still missing
+  boundaries directly. SRDatalog now provides external GPU WCOJ runtime data,
+  but local egglog-specific WCOJ/equality/container/scheduler data is still
+  missing
   (`options/option-3-new-backend.md`).
 - **Proof/term encoding to DD.** Long-term benefit: a concrete relational
   specification for equality maintenance and proof experiments. Main blocker
@@ -383,7 +403,9 @@ Evidence that would clarify the choice:
 - Classify 3-5 real egglog rules as acyclic, cyclic, repeated-variable, or
   equality-heavy, then compare source-order binary joins with a WCOJ-style
   operator on at least one cyclic pattern. The first classification pass is
-  complete; the WCOJ runtime comparison still needs graph input data.
+  complete; the local WCOJ runtime comparison still needs graph input data, and
+  the SRDatalog paper should be used to choose GPU-specific WCOJ constraints
+  rather than treated as an egglog measurement.
 - Build the Option 3 replacement-backend vertical slice: one small
   relation/function-table universe, per-rule freshness, one
   rebuild/canonicalization event, one dirty-refresh-style invalidation, one

@@ -19,8 +19,8 @@
 ## General Approach
 - Build an authoritative egglog backend inspired by FlowLog's planner/control
   split, DD/Timely's maintained dataflow and frontier model, and
-  datatoad/dataflow-join-style WCOJ kernels. The new backend owns its chosen
-  runtime state instead of adapting to native table state after the fact.
+  datatoad/dataflow-join/SRDatalog-style WCOJ kernels. The new backend owns its
+  chosen runtime state instead of adapting to native table state after the fact.
 - Keep the egglog language, parser, typechecker, command runner, existing test
   corpus, and native backend as compatibility surface and oracle. The new
   backend should be selected for experiments behind an explicit backend switch
@@ -61,6 +61,10 @@
   filters, projections, semijoins, binary joins, WCOJ joins, recursive feedback,
   action outputs, maintained-view planning, multiplicity-aware deltas, and
   proof-aware dependent lookups keyed by bindings from earlier atoms.
+- If the slice targets GPU execution, a storage/execution API that makes
+  SRDatalog-style constraints explicit: flat sorted columns, column order,
+  deterministic output counts, bulk materialization offsets, skew histograms,
+  and helper-relation split points.
 - A schedule API that records rule last-run timestamps and separates logical
   schedule visibility from physical DD/Timely progress, including product or
   frontier timestamp accounting for fixed-point work.
@@ -79,8 +83,11 @@
 - Passed as native-oracle regressions: rebuild/action, equality/rebuild,
   custom scheduler/backoff, and same-id container dirty-refresh cases.
 - Not proven: useful overlap through real native barriers, row-level
-  rebuild/container counters, trace memory and compaction behavior, WCOJ runtime
-  comparison, or single-owner replacement-backend semantics.
+  rebuild/container counters, trace memory and compaction behavior, local
+  egglog-specific WCOJ runtime comparison, or single-owner replacement-backend
+  semantics. The SRDatalog paper supplies external GPU Datalog WCOJ evidence,
+  but it does not cover egglog equality rebuild, containers/primitives, proof
+  encoding, or custom scheduler behavior.
 - Interpretation: the middle-layer adapter reading is downgraded because it
   would mirror too much native state. The new-backend reading remains viable
   because a backend is allowed to own that complexity, provided it can replace
@@ -97,6 +104,10 @@
   planner shape: compare naive seminaive delta expansion with a proof-aware
   dependent lookup plan that decides whether `C[t..]` should drive based on
   cardinality and functional-dependency information.
+- If GPU WCOJ remains part of the proposed collaboration, the follow-up should
+  also classify one SRDatalog-shaped Datalog workload against one egglog-shaped
+  equality/container workload, so the team can separate "WCOJ is solved enough"
+  from "egglog backend semantics are solved enough."
 - The gate fails if correctness depends on calling back into native
   `core-relations` for a responsibility the new backend claims to own.
 - The gate also fails if the new backend cannot expose the counters the current
@@ -106,6 +117,6 @@
 ## Current Assessment
 - Option 3 is no longer a small integration path. It is a replacement-backend
   research path. That makes its scope large but coherent: FlowLog/DD/datatoad
-  ideas are evaluated as the design of a new backend rather than as a shim over
-  native tables. The current evidence justifies the next vertical-slice
-  experiment; it does not justify a broad rewrite yet.
+  and SRDatalog ideas are evaluated as the design of a new backend rather than
+  as a shim over native tables. The current evidence justifies the next
+  vertical-slice experiment; it does not justify a broad rewrite yet.

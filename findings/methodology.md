@@ -229,6 +229,7 @@ passes. For the current consolidated conclusion, read `synthesis.md`.
 | `../papers/Distributed Evaluation of Subgraph Queries.pdf` | Streaming / distributed WCOJ paper. Relevant to dataflow-style GenericJoin and the `dataflow-join` code. |
 | `../papers/Free Join Unifying Worst-Case Optimal and Traditional Joins.pdf` | Free Join paper. Relevant to hybrid plans that combine binary joins and WCOJ-style stages. |
 | `../papers/leapfrog treejoin.pdf` | Leapfrog Triejoin paper. Baseline WCOJ algorithm to compare against dataflow-oriented GenericJoin variants. |
+| `../papers/Scaling Worst-Case Optimal Datalog to GPUs.pdf` | SRDatalog paper. Relevant to GPU WCOJ for recursive Datalog, flat columnar storage, deterministic two-phase materialization, skew handling, and stream-parallel rule scheduling. |
 | `../papers/Parallel and Customizable Equality Saturation.pdf` | Parallel EqSat paper. Relevant for parallelism strategy comparisons independent of DD. |
 | `../papers/Seamless DeductiveInference via Macros.pdf` | Ascent paper. Relevant to embedded Datalog in Rust and macro-generated rule engines. |
 

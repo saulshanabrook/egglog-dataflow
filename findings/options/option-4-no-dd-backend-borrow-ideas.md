@@ -25,6 +25,10 @@
 ## General Approach
 - Keep the production backend in egglog, but clarify the internal rule-evaluation boundary around `CoreRule`/`BackendRule` and `core-relations` so rule bodies can be planned, profiled, and executed through swappable native strategies.
 - Add a native planner that can choose among existing binary/free-join execution, semijoin/SIP-style filtering, and datatoad/free-join-style WCOJ for selected multiway or cyclic patterns (`findings/source-notes/datalog-wcoj-planning.md`).
+- If GPU execution becomes a serious target, borrow SRDatalog's WCOJ constraints
+  as native/provider experiments first: flat sorted columns, two-phase
+  count/materialize allocation, skew histograms, helper-relation splitting, and
+  stream multiplexing only behind schedule-safe rule boundaries.
 - Preserve and expose the existing seminaive timestamp machinery as a first-class native feature: per-rule last-run timestamps, timestamp-window scans, and row refresh from rebuild should be visible to profiling and planner experiments.
 - Experiment with columnar or columnar-inspired row batches for high-volume relation scans and deltas, but only behind relation-storage interfaces so e-class ids, containers, and rebuild mutation keep their current semantics (`findings/source-notes/extension-models.md`).
 - Introduce a provider-style interface inspired by Ascent BYODS for special relations: ordinary relations, equality/union-find-backed relations, container indexes, and possibly columnar-backed relations. This should be treated as a first-class boundary option, not just a helper inside the native path: ordinary relations could remain on the default engine while equality/container/rebuild-sensitive relations use specialized providers.
@@ -34,6 +38,9 @@
 - No runtime responsibility moves to DD as a backend.
 - FlowLog contributes architectural ideas: explicit rule IR, planner/control separation, recursive/fixpoint boundary naming, profiling hooks, and SIP-style planning.
 - Datatoad/free-join contributes join-kernel ideas: variable ordering, count/propose/validate WCOJ stages, delta/base staging, and robust handling of cyclic/high-arity joins.
+- SRDatalog contributes GPU-specific execution ideas: flat columnar WCOJ over
+  seminaive deltas, deterministic bulk materialization, skew-aware launch
+  partitioning, and phase-aligned stream scheduling.
 - DD/Timely contributes concepts, not ownership: arrangements as shared maintained indexes, coarse epochs for batched changes, compaction awareness, and operator-boundary layout thinking.
 - Eli's backend draft contributes native baseline ideas that should be improved before migration: timestamp-ordered hash tables, staged mutation buffers, deterministic parallel compaction, table-provider hooks, Free Join, dynamic variable ordering, and future binary/bushy planning.
 - Ascent/columnar contributes extension and storage patterns: custom provider interfaces and column-oriented fact storage for selected native relations, with the provider boundary itself kept visible as a separate design axis.
@@ -63,6 +70,9 @@
 
 ## Evidence To Gather
 - Classify 3-5 real egglog rules as acyclic, cyclic, repeated-variable, or equality-heavy; compare current planning against a prototype WCOJ or semijoin plan on one cyclic/high-arity case.
+- For any GPU-oriented prototype, test whether flat sorted column storage
+  survives canonical-id rewrites and same-id container refreshes without
+  rebuilding most of the relation.
 - Add profiling counters for current `core-relations`: per-rule matches,
   intermediate cardinalities, table rebuild rows scanned/retimestamped, dirty
   ids, dirty-container refresh rows, and scheduler skips. The Option 3 lanes
