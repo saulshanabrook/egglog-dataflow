@@ -41,6 +41,20 @@
 - The prototype encodes e-class maintenance as nested iterative DD computations: outer iteration maintains `(node, class)` from `nodes`, enters `nodes`/`equiv`, derives congruent ASTs with joins/reduces, then runs a second `symms.iterate` transitive closure over equivalence edges (`code/dd-pr-525-eqsat.rs:30`, `:34`, `:37`, `:45`, `:46`, `:56`, `:65`, `:67`, `:71`). The inline warning says not to implement connected components this way (`code/dd-pr-525-eqsat.rs:63`).
 - Equality maintenance may be expensive where equivalence changes rewrite many child class ids: the prototype joins every argument occurrence against `eq_class`, groups all rewritten args per node, joins by `(children, op)`, then reduces each congruence key to one representative (`code/dd-pr-525-eqsat.rs:40`, `:46`, `:47`, `:54`, `:56`). Large class merges can therefore invalidate high-degree argument/rebuild keys, and ordinary tuple deletes are not enough to model rebuild invalidation or same-id dirty refresh.
 - The PDF supports the substrate fit at the model level: it claims differential computation extends incremental computation to arbitrarily nested iteration, uses partially ordered versions, retains individual differences, and may emit multiple output differences for one input difference. That supports nested egglog-style saturation but also flags complexity when equality updates interact with iteration (`papers/differentialdataflow.pdf`, pages 1-4 extracted locally).
+- April 24 notes sharpen the interpretation of DD's `Z`-valued collection
+  model: integer multiplicities generalize set Datalog and seminaive deltas at
+  the substrate level, but they do not make proof-query optimization automatic.
+  Egglog still needs a planner that knows proof atoms, functional dependencies,
+  row freshness, and cardinalities.
+- The same notes strengthen the product-timestamp story. A DD value can carry a
+  partial-order time such as `(input time, loop iteration)`, which explains how
+  fixed-point/rebuild-like work and per-rule freshness could coexist in one
+  backend. That is still only valid for egglog if logical schedule gates decide
+  when matches/actions become observable.
+- Maintained intermediate views are the cleanest DD/Timely upside for rule
+  matching and rebuild-adjacent relations: instead of recreating or rerunning
+  derived views at each boundary, the backend could keep selected indexes and
+  views current across streamed deltas.
 
 ## Relevance To The Main Objective
 - This supports moving egglog onto DD for the relational/incremental substrate: e-node tables, parent/child indexes, rule joins, semijoins, deduplication, and aggregates line up with DD collections, arrangements, and trace sharing.
@@ -65,6 +79,9 @@
 - Enter loop-invariant arrangements into iteration scopes so static or slowly changing relation indexes are timestamp-wrapped, not physically rebuilt.
 - Keep equality ownership split: DD maintains parent indexes and derived relation deltas; a specialized union/congruence component emits batched class-change deltas into DD.
 - Use trace compaction frontiers as a design lever for rebuild phases: after a phase's historical times are no longer queried, aggressively compact traces to avoid accumulating per-iteration equality history. Treat this compaction strategy as a workload-dependent hypothesis, not a fixed rule.
+- Keep language-level `loop/fixpoint` exposure as an Option 3-dependent
+  research question. It may become a useful way to explain or control recursive
+  query fragments, but the current plan should not assume new frontend syntax.
 
 ## Evidence Needed Next
 - Measure the local prototype on merge-heavy cases: number of DD records emitted by `args.join_map(eq_class)`, congruence-key reduce, and `symms.iterate` as class size and parent fanout grow.

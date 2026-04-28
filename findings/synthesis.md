@@ -27,6 +27,8 @@ Evidence to continue:
 - A FlowLog/DD-inspired backend slice can overlap physical work across logical
   egglog iterations while preserving exact logical schedule semantics, using
   DD/Timely timestamp and frontier tracking.
+- A DD/Timely slice can show that maintained views and product timestamps reduce
+  proof/rebuild-rule work without violating egglog's per-rule freshness.
 - The first Option 3 scheduling prototype preserved per-rule freshness and
   gated visibility on the scheduled reachability witness while allowing up to
   three future logical tasks in flight (`option-3-experiments.md`).
@@ -371,6 +373,9 @@ Evidence that would clarify the choice:
 - Reproduce Eli's scheduled reachability example and use it as the minimum
   semantic regression for any DD/FlowLog rule-evaluation or schedule-lowering
   prototype.
+- Test the April 24 `A/B/C` proof-query shape as a planner benchmark, measuring
+  naive seminaive delta expansion against functional-dependency-aware dependent
+  lookup.
 - Reproduce the documented container witness
   `2 + a + b + b + 3` across binary A/C rules, multiset containers with an
   index, and higher-order multiset functions. Measure whether a DD-backed index

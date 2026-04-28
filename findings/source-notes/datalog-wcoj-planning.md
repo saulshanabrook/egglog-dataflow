@@ -34,6 +34,12 @@
 - `dataflow-join` shows WCOJ can be expressed as timely/dataflow operators: prefix extenders implement `count`, `propose`, and `intersect`, and `GenericJoin::extend` partitions prefixes by the cheapest proposer before intersection (`repos/dataflow-join/src/lib.rs`). But it is a low-level streaming join library, not a Datalog planner or recursive rule engine, so it is also inspiration rather than drop-in reuse.
 - The FlowLog paper argues for a relational IR per rule, Datalog-aware optimizations, SIP, and DD execution; the Free Join paper argues WCOJ and binary joins should be unified rather than treated as mutually exclusive. Together they support a hybrid design: FlowLog-style rule planning/control with datatoad/free-join-style multiway join operators for selected bodies.
 - Eli's backend draft adds direct egglog evidence for this hybrid direction: current egglog uses a Free Join variant with lazy subsets, cached hash indexes, fused scans, batching, vectorized actions, morsel-driven parallelism, and dynamic variable ordering. It also identifies binary and bushy plans as future work for common queries where Free Join/GJ has overhead (`repos/scaling-equality-saturation/egglog-new-backend.md`, `findings/source-notes/scaling-equality-saturation.md`).
+- The April 24 proof-query note adds a concrete planner requirement: proof
+  tables and similar functionally dependent atoms must be represented as
+  dependent lookups in the relational IR, not only as ordinary join atoms. In
+  the `A/B/C` shape, `C` can depend on bindings produced by `A`; a planner must
+  know when `C[t..]` should drive an old/old/new case and when it should be
+  late-bound after `A` and `B`.
 
 ## Relevance To The Main Objective
 - This supports moving egglog onto DD only if the design includes a planning layer above DD collections. DD gives incremental iteration and arrangements, but the inspected systems suggest rule evaluation needs explicit planning for recursion boundaries, arrangements, join order, semijoins, and aggregation-like postprocessing.
@@ -41,6 +47,10 @@
 - The substrate could also own physical schedule lowering: a user-facing egglog ruleset could be split into many smaller DD iterations or delta tasks if DD frontiers preserve logical schedule semantics, per-rule timestamp windows, and rebuild invalidation visibility.
 - Datatoad-style WCOJ should be considered a join operator family inside that planner, not the whole substrate. It is most relevant for cyclic/high-arity rule bodies where binary joins create large intermediates.
 - Direct DD collections are still the execution target, but using them directly as the design abstraction would under-specify rule planning and likely recreate FlowLog's planner/compiler piecemeal.
+- Proof-aware planning is part of that missing layer. DD can maintain the
+  arrangements and deltas, but egglog-specific rule planning must encode
+  functional dependencies, dependent lookup atoms, and cardinality-aware choices
+  for seminaive delta cases.
 
 ## Likely Blockers
 - Egglog rules include equality maintenance, e-class canonicalization, rebuild effects, and congruence-like updates; none of FlowLog, datatoad, or `dataflow-join` directly models that lifecycle, so a separate invalidation channel still needs to be designed.
@@ -50,12 +60,18 @@
 - Incremental WCOJ inside recursive DD feedback needs careful timestamp/progress semantics; `dataflow-join` handles indexed stream extenders, but not Datalog stratification, egglog saturation control, or rebuild invalidation.
 - DD-overlapped physical scheduling can conflict with egglog custom schedulers and side-effectful actions, because those may require all matches for a logical step before choosing which actions fire. That may force barriers even if the DD substrate can keep some work in flight.
 - Per-rule seminaive timestamp windows add an index-planning constraint: timestamp constraints need efficient pushdown before joins, and value-ordered join indexes may need auxiliary time slicing.
+- Proof and explanation tables add a second planning constraint: driving from a
+  newly fresh proof atom can be correct but wasteful unless cardinality and
+  functional-dependency information show that `C[t..]` is selective enough.
 
 ## Promising Connections
 - Reuse FlowLog's conceptual pipeline: parse/rules -> catalog/IR -> optimizer/planner -> DD compiler, with egglog-specific operators for e-class canonicalization and rebuild-aware relation maintenance.
 - Use FlowLog's recursive split as a model for factoring EDB-only or stable e-node relation work outside saturation loops while rerunning only IDB/equality-dependent transformations inside feedback.
 - Replace or augment FlowLog's binary join core with a datatoad-like `count/propose/validate` operator for rule bodies that form cyclic joins or have repeated shared variables.
 - Use SIP/semijoin filtering from FlowLog before expensive e-matches, especially when one atom has selective bindings from a pattern root, symbol, or e-class id.
+- Add proof-aware dependent lookup to the planner IR so atoms keyed by earlier
+  bindings can be late-bound instead of always participating as independent
+  delta drivers.
 - Use Free Join's framing as the long-term target: a unified planner that can choose binary joins, semijoins, or WCOJ without forcing all rules into one execution style.
 - Use current egglog Free Join as the baseline when evaluating DD/FlowLog/datatoad plans; the comparison should include dynamic variable ordering and binary/bushy alternatives, not only source-order binary joins.
 
@@ -67,6 +83,9 @@
 - Determine whether DD arrangements can serve as the backing indexes for WCOJ proposals, or whether trie/COLT-style indexes must be maintained separately.
 - Compare a bulk ruleset run against a DD-overlapped physical schedule on the same egglog rule cluster, measuring throughput, progress traffic, retained trace state, per-rule freshness, final e-graph equivalence, and whether later-iteration outputs/actions are gated until the logical schedule permits them.
 - Add the scheduled reachability example from Eli's draft to rule-planner tests so any FlowLog/DD lowering proves per-rule timestamp freshness before measuring speed.
+- Add the April 24 `A/B/C` proof-query shape as a planner benchmark. Compare
+  naive seminaive delta expansion against functional-dependency-aware dependent
+  lookup, including the old/old/new case where `C[t..]` is the only new input.
 
 ## Local Experiment Update
 - The rule-classification lane separates fair join/planner targets from

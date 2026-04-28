@@ -59,9 +59,11 @@
   rule ids, relation ids, canonical ids, and explicit row freshness semantics.
 - A rule-planning API that can represent egglog atoms, repeated variables,
   filters, projections, semijoins, binary joins, WCOJ joins, recursive feedback,
-  and action outputs.
+  action outputs, maintained-view planning, multiplicity-aware deltas, and
+  proof-aware dependent lookups keyed by bindings from earlier atoms.
 - A schedule API that records rule last-run timestamps and separates logical
-  schedule visibility from physical DD/Timely progress.
+  schedule visibility from physical DD/Timely progress, including product or
+  frontier timestamp accounting for fixed-point work.
 - A rebuild/invalidation API that represents representative rewrites,
   row refreshes, retractions/reinsertions, and same-id container dirty refresh
   without calling native `core-relations` for the moved responsibility.
@@ -91,6 +93,10 @@
   dirty-refresh-style invalidation or equivalent, preserve one scheduler
   materialization boundary, and compare step-visible state against native
   egglog.
+- The slice or its immediate follow-up should include the April 24 proof-query
+  planner shape: compare naive seminaive delta expansion with a proof-aware
+  dependent lookup plan that decides whether `C[t..]` should drive based on
+  cardinality and functional-dependency information.
 - The gate fails if correctness depends on calling back into native
   `core-relations` for a responsibility the new backend claims to own.
 - The gate also fails if the new backend cannot expose the counters the current
