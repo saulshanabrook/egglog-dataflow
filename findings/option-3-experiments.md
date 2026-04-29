@@ -6,8 +6,9 @@ can keep future logical rule tasks physically in flight while preserving exact
 egglog-style per-rule freshness and visibility gates.
 
 For interpretation of the results, see
-`findings/option-3-experiment-findings.md`. For the generated ordered lane
-index, see `findings/experiments/option-3/README.md`.
+`findings/archive/2026-04-prior-backend-plans/option-3-experiment-findings.md`.
+For the generated ordered lane index, see
+`findings/experiments/option-3/README.md`.
 
 ## Commands
 
@@ -83,7 +84,7 @@ logical task lag was three tasks.
   barrier variant sometimes matched or beat the best overlapped run.
 - Synthetic native barriers collapse this harness back toward stop/start
   behavior. The option-level interpretation of that result is maintained in
-  `findings/option-3-experiment-findings.md`.
+  `findings/archive/2026-04-prior-backend-plans/option-3-experiment-findings.md`.
 - This log does not measure equality maintenance, rebuild invalidation,
   containers, WCOJ runtime, or provider boundaries.
 
@@ -99,4 +100,5 @@ python3 code/option3-overlap/scripts/summarize_option3_lanes.py findings/artifac
 ```
 
 The canonical interpretation is intentionally kept out of this reproducibility
-log; see `findings/option-3-experiment-findings.md`.
+log; see
+`findings/archive/2026-04-prior-backend-plans/option-3-experiment-findings.md`.

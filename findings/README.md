@@ -1,85 +1,39 @@
 # Findings
 
-This directory stores the durable research context for deciding whether
-`egglog` should move part of its runtime onto Differential Dataflow or a related
-dataflow/database substrate.
+This directory stores durable research context for the next phase: a minimal
+external DD trial that models a small egglog subset, uses native egglog as an
+oracle, and records how egglog concepts map to DD concepts before performance
+claims are made.
 
-The top-level README is the short collaborator handoff. This directory is the
-index for deeper conclusions, methodology, option analysis, and source notes.
-
-## Entry Points
+## Active Entry Points
 
 | Path | Purpose |
 | --- | --- |
-| [synthesis.md](synthesis.md) | Consolidated evidence, continue/stop criteria, and possible next evidence-gathering work. |
-| [option-3-experiments.md](option-3-experiments.md) | Runnable Option 3 scheduling-overlap reproducibility log. |
-| [option-3-experiment-findings.md](option-3-experiment-findings.md) | Canonical interpretation of what the Option 3 experiments show. |
-| [dd-full-refactor-design-spike.md](dd-full-refactor-design-spike.md) | Full-refactor design spike for replacing the egglog backend with a DD-owned runtime. |
-| [dd-refactor-high-level-fixes.md](dd-refactor-high-level-fixes.md) | High-level semantic and API goals for the DD refactor beyond the first runtime scaffold. |
-| [primitive-prototyping.md](primitive-prototyping.md) | Focused syntax and prototype plan for query-defined primitives, lambdas, merge/reduce behavior, and A/C experiments. |
-| [pr-856-typed-execution-state-review.md](pr-856-typed-execution-state-review.md) | Review of PR #856 and issue #772 as design input for seminaive-safe containers and higher-order primitives. |
-| [dd-design-spike-alignment-review.md](dd-design-spike-alignment-review.md) | Review of how the DD design spike aligns with the high-level values and PR #856 typed-state evidence. |
-| [experiments/option-3/README.md](experiments/option-3/README.md) | Generated ordered index of the Option 3 lane artifacts. |
-| [2026-04-29-egglog-on-gpu-meeting-prep.md](2026-04-29-egglog-on-gpu-meeting-prep.md) | Concise prep note for the April 29, 2026 egglog-on-GPU discussion. |
-| [options/README.md](options/README.md) | Tradeoff analysis of the backend boundary paths. |
-| [methodology.md](methodology.md) | Detailed research framing, scientific questions, source inventory, reading order, and design risks. |
-| [source-notes/](source-notes/) | First-pass evidence notes by source cluster. |
+| [`minimal-dd-trial.md`](minimal-dd-trial.md) | Canonical current trail for goal, non-goals, mapping questions, benchmark categories, oracle requirements, and open planning inputs. |
+| [`evidence-ledger.md`](evidence-ledger.md) | Claim ledger. Each synthesized conclusion has a source fact, source path, confidence, and relevance. |
+| [`synthesis.md`](synthesis.md) | Compact current conclusions that cite ledger IDs. |
+| [`methodology.md`](methodology.md) | Source inventory only: raw conversations, papers, vendored repos, artifacts, and reading order. |
+| [`source-notes/`](source-notes/) | Detailed source-cluster notes from the reading passes. |
+| [`experiments/option-3/README.md`](experiments/option-3/README.md) | Ordered index of existing Option 3 artifacts and measured lane outputs. |
+| [`archive/2026-04-prior-backend-plans/`](archive/2026-04-prior-backend-plans/) | Superseded synthesized backend-option and scaffold planning docs. |
 
-## Reading Status
+## Current Status
 
-| Workstream | Note | Status |
-| --- | --- | --- |
-| Egglog Core + Proof Encoding | `source-notes/egglog-core-proof.md` | Complete |
-| Containers + Frontends | `source-notes/containers-frontends.md` | Complete |
-| Differential/Timely Substrate | `source-notes/differential-timely.md` | Complete |
-| Datalog/WCOJ/Planning Systems | `source-notes/datalog-wcoj-planning.md` | Complete |
-| Comparative Extension Models | `source-notes/extension-models.md` | Complete |
-| Conversations + Social Motivation | `source-notes/conversations-social.md` | Complete |
-| Scaling Equality Saturation | `source-notes/scaling-equality-saturation.md` | Complete |
-| GPU WCOJ Paper + Meeting Prep | `2026-04-29-egglog-on-gpu-meeting-prep.md` and `source-notes/datalog-wcoj-planning.md` | Complete |
+The April 29 Eli meeting note changes the active framing from "plan an in-repo
+backend scaffold" to "prepare evidence for a small external DD model" (`E-001`,
+`E-002`). The new docs therefore prioritize source-backed mapping questions and
+oracle requirements over implementation milestones.
 
-## Synthesis
+Older option-ladder and full-refactor docs are not deleted. They are archived
+because they contain useful evidence and historical reasoning, but they also
+repeat superseded implementation instructions (`E-011`, `E-012`, `E-013`).
 
-- [synthesis.md](synthesis.md): consolidated evidence, provisional assessment, and possible
-  evidence-gathering work.
+## Update Discipline
 
-Current provisional assessment: no backend path has been selected. The evidence
-is strongest as a map of tradeoffs: DD/FlowLog/datatoad may help with relational
-matching and planning, while equality maintenance, rebuilding, containers,
-schedules, extension APIs, and frontend compatibility remain the main blockers.
-Option 3 now means a single-owner new backend path, not a permanent adapter over
-native tables. The experiments downgrade adapter duplication but leave a
-replacement-backend vertical slice as the next serious gate.
-
-## Option Tradeoff Pass
-
-- [options/README.md](options/README.md): tradeoff analysis of the backend
-  boundary paths from `synthesis.md`.
-
-Current option tradeoff map, ordered by increasing complexity and disruption:
-
-- Native improvement / borrow ideas avoids backend migration risk for existing
-  semantics, but gives less maintenance leverage from a shared substrate unless
-  provider-style relation boundaries isolate reusable pieces. It is now a
-  stronger baseline because the native backend already has timestamp-ordered
-  tables, staged mutation, provider hooks, Free Join, and parallel bulk
-  execution.
-- Exact hybrid DD rule evaluation lowers syntax and frontend disruption by
-  keeping equality/rebuild native, but depends on a difficult delta contract
-  between egglog and DD, including explicit rebuild invalidation, per-rule
-  seminaive freshness, and scheduler match selection.
-- [Option 3: FlowLog/datatoad/DD-inspired new backend](options/option-3-new-backend.md)
-  now has a positive semantic schedule result and a clarified next gate: prove
-  a replacement-backend vertical slice with single ownership instead of
-  mirroring native rebuild, container, scheduler, and equality state.
-- Proof/term encoding gives a clear relational equality specification, but
-  current evidence raises overhead concerns and cannot validate the full
-  Python/container/scheduler frontend surface.
-
-## Coverage
-
-The first reading pass covers every source cluster listed in
-`methodology.md`: core `egglog`, Python and experimental frontends,
-Differential/Timely, FlowLog/datatoad/WCOJ sources, comparative systems, local
-papers, local discussion transcripts, the scaling equality saturation draft,
-and high-signal blog posts.
+- Preserve raw evidence: `messages/`, `papers/`, `repos/`, `code/`, and
+  `findings/artifacts/`.
+- Put new synthesized conclusions in [`evidence-ledger.md`](evidence-ledger.md)
+  before repeating them in other active docs.
+- In active docs, cite ledger IDs or raw source paths for non-obvious claims.
+- Keep implementation sequences out of the active current-trail docs until a
+  future MVP plan is explicitly requested.

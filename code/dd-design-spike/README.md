@@ -1,6 +1,7 @@
 # DD Design Spike Prototype
 
-This throwaway prototype supports `findings/dd-full-refactor-design-spike.md`.
+This throwaway prototype supports the archived
+`findings/archive/2026-04-prior-backend-plans/dd-full-refactor-design-spike.md`.
 It is not an egglog backend.
 
 The prototype checks a narrow DD lifecycle question:
