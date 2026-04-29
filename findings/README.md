@@ -15,6 +15,10 @@ index for deeper conclusions, methodology, option analysis, and source notes.
 | [option-3-experiments.md](option-3-experiments.md) | Runnable Option 3 scheduling-overlap reproducibility log. |
 | [option-3-experiment-findings.md](option-3-experiment-findings.md) | Canonical interpretation of what the Option 3 experiments show. |
 | [dd-full-refactor-design-spike.md](dd-full-refactor-design-spike.md) | Full-refactor design spike for replacing the egglog backend with a DD-owned runtime. |
+| [dd-refactor-high-level-fixes.md](dd-refactor-high-level-fixes.md) | High-level semantic and API goals for the DD refactor beyond the first runtime scaffold. |
+| [primitive-prototyping.md](primitive-prototyping.md) | Focused syntax and prototype plan for query-defined primitives, lambdas, merge/reduce behavior, and A/C experiments. |
+| [pr-856-typed-execution-state-review.md](pr-856-typed-execution-state-review.md) | Review of PR #856 and issue #772 as design input for seminaive-safe containers and higher-order primitives. |
+| [dd-design-spike-alignment-review.md](dd-design-spike-alignment-review.md) | Review of how the DD design spike aligns with the high-level values and PR #856 typed-state evidence. |
 | [experiments/option-3/README.md](experiments/option-3/README.md) | Generated ordered index of the Option 3 lane artifacts. |
 | [2026-04-29-egglog-on-gpu-meeting-prep.md](2026-04-29-egglog-on-gpu-meeting-prep.md) | Concise prep note for the April 29, 2026 egglog-on-GPU discussion. |
 | [options/README.md](options/README.md) | Tradeoff analysis of the backend boundary paths. |

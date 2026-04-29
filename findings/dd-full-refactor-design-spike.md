@@ -26,7 +26,29 @@ lowering can drive a DD-owned runtime, then run a separate Option 3
 replacement-backend ownership gate before claiming the design is ready to replace
 native execution for a meaningful semantic slice.
 
+## Meta Goal Alignment
+
+This spike should be read through the same project goals as
+[`dd-refactor-high-level-fixes.md`](dd-refactor-high-level-fixes.md):
+
+- **Research platform:** preserve backend hooks for provider/dependency views,
+  query-defined primitives, solver constraints, and multiple A/C strategies
+  without choosing one representation now.
+- **Real-world utility:** preserve current semantics on the selected slice, keep
+  compatibility breaks explicit, use native egglog as an oracle during
+  migration, and require performance smoke checks before mergeability claims.
+- **Maintainability:** move toward one DD-owned production runtime, delete the
+  bridge/core-relations duplication over time, and keep backend responsibilities
+  modular enough that experiments do not require another execution fork.
+
 ## Evidence Gathered In This Spike
+
+This revision also uses
+[`pr-856-typed-execution-state-review.md`](pr-856-typed-execution-state-review.md)
+and
+[`dd-design-spike-alignment-review.md`](dd-design-spike-alignment-review.md) as
+design evidence. They inform the semantic boundaries below, but they do not
+make PR #856's exact API part of this design.
 
 ### Repo boundary evidence
 
@@ -174,15 +196,18 @@ compaction, not as the only encoding of egglog seminaive freshness.
 | Facts and relation queries | MVP | Insert facts into DD-owned relation sessions; read visible state only after probe gates. |
 | Function tables | MVP | Store rows as keyed rows with optional output and subsume state. Preserve `DefaultVal::Fail` lookup semantics separately from constructor/default insertion: missing custom-function lookups must take the current panic/failure path, not become optional absence or fresh insertion. |
 | Constructor fresh ids | MVP | Host-side action application owns fresh-id allocation and feeds committed rows back into DD. |
-| Primitive query filters | MVP | Support pure/read-only primitive filters in compiled fragments. |
-| Primitive actions | MVP narrow | Execute host-side at action application boundaries; fail/panic semantics must match current behavior. |
+| Primitive query filters | MVP | Support pure primitive filters in compiled rule bodies. Rule-query primitives must not perform hidden database reads; such reads must be explicit query atoms or deferred to declared-read/provider work. |
+| Declared-read primitives | Extension-ready later | Read-capable primitives or callbacks are sound only when their dependencies are visible to seminaive invalidation: explicit matched inputs, declared dependencies, provider deltas, or another maintained wakeup mechanism. |
+| Primitive/action capability contexts | Scaffold contract, API later | PR #856 / issue #772 provide evidence for separating rule-query, rule-action, global-query, and global-action capabilities. The DD design should preserve that semantic split without requiring PR #856's exact public API names or implementation. |
+| Primitive actions | MVP narrow | Execute host-side at action application boundaries; fail/panic semantics must match current behavior. Rule actions may write based on matched bindings, but hidden live reads must be rejected, made explicit in the match, or represented as declared dependencies with a wakeup plan. |
 | Per-rule seminaive freshness | MVP | Store `row_ts` and `last_run`; filter candidate rows by freshness in compiled fragments. |
 | Simple merges | MVP narrow | Implement `Old`, `New`, `AssertEq`, and `UnionId` first. |
 | Union/canonicalization | MVP vertical slice | Specialized canonical map emits displaced ids, then DD receives row rewrite/retraction deltas. |
 | Rebuild | MVP vertical slice | Rebuild to fixed point for the selected table universe; committed row deltas must replay from initial live rows to final live rows. Collision candidates that only drive merges must not appear as live-row insertions unless they are actually committed. |
 | Delete | Action ABI MVP; semantic slice later | `Change::Delete` must be represented in the first backend action boundary so later mutation work does not reopen the ABI. Full negative-diff live-row semantics can land with the mutation slice. |
 | Subsume | Action ABI MVP; semantic slice later | `Change::Subsume` must be represented in the first backend action boundary. Full active/all-row/provenance view semantics can land with the mutation slice. |
-| Containers | Post-MVP parity | Same-id semantic changes require dirty-refresh events: `-row@old_ts +same_row@next_ts`; the toy contract now passes, but broad container parity remains later. |
+| Containers | Post-MVP parity | Same-id semantic changes require dirty-refresh events: `-row@old_ts +same_row@next_ts`; the toy contract now passes, but broad native container matching and provider-indexed matching remain later. |
+| Higher-order container callbacks | Ownership-gate proof point | Prove one coarse dependency-tracked callback such as safe `unstable-vec-map`. The first acceptable version can record container id, callback identity, captured args, and state reads in Rust; it does not need fine-grained `VecElem`/provider indexing. |
 | Scheduler worklists | Interface MVP, parity later | Materialize matches, ask scheduler, write chosen matches, then fire actions behind a barrier; define the backend interface before the scaffold PR. |
 | Reports | MVP minimal | Return changed/match/rebuild counts for touched rules; expand after counters stabilize. |
 | Serialization | MVP smoke for full file harness | The file-test harness appends `(print-size)` and then exercises graph/serialization paths, so table readback must have a smoke implementation before `tests/files.rs` is used as a gate. Full stable/subsumed parity can follow. |
@@ -249,7 +274,8 @@ additional output checks, so it is not an execution-only gate.
 - stable/full serialization parity;
 - complex merge functions that read other functions;
 - arbitrary schedulers/backoff;
-- full container tests, especially same-id dirty refresh;
+- full container tests, including same-id dirty refresh before the ownership
+  gate, broad native container matching, and provider-indexed matching;
 - push/pop;
 - legacy Rust extension APIs. The scaffold may break APIs that expose
   `ExecutionState`, `TableAction`, `UnionAction`, `FunctionRow`,
@@ -284,6 +310,15 @@ They are bounded design-spike prototypes, not production backend code.
   throughput or concurrency behavior.
 - Push/pop, extraction/proofs, Rust API migration, and stable serialization
   parity still need separate design work.
+- Query-defined primitives, inline lambdas, native/provider-backed matching,
+  declared-read primitives, solver constraints, and merge/reduce semantics are
+  follow-up language/runtime design work, not part of the first DD scaffold. The
+  current design trail is
+  [`dd-refactor-high-level-fixes.md`](dd-refactor-high-level-fixes.md) and
+  [`primitive-prototyping.md`](primitive-prototyping.md).
+- PR #856 / issue #772 are useful capability-boundary evidence, but the DD
+  scaffold should describe abstract rule/global query/action semantics rather
+  than copying that API directly.
 
 ## DD Runtime Scaffold Handoff
 
@@ -310,10 +345,16 @@ Build a narrow DD runtime scaffold, not the Option 3 ownership gate:
 - Compile a small subset of `ResolvedCoreRule` into DD fragments over shared
   relation arrangements.
 - Support facts, relation joins, repeated variables, pure primitive query
-  filters, constructor/default insert, `DefaultVal::Fail` missing-lookup
-  behavior, host-side action application, and per-rule seminaive freshness.
+  filters only, constructor/default insert, `DefaultVal::Fail` missing-lookup
+  behavior, host-side action application after output netting, and per-rule
+  seminaive freshness.
+- Reject or defer primitive/callback forms that perform hidden rule-query reads;
+  those require explicit matched inputs, declared dependencies, or provider
+  deltas before they are admitted to seminaive rule bodies.
 - Include `Delete` and `Subsume` in the action ABI from the start, even if their
   full live/active/all-row semantics land in the mutation slice.
+- Keep rule actions write-oriented: any action-side live read must already be in
+  the matched inputs, be rejected, or have a declared-dependency wakeup plan.
 - Materialize DD outputs by net signed diff before actions fire.
 - Track known failures explicitly. It is acceptable for many tests to fail in
   the scaffold branch if the failures match the expected-failure list below.
@@ -378,6 +419,9 @@ The DD runtime scaffold PR is successful if it:
   inserts, output diffs, compaction frontier, and RSS or trace-memory proxy;
 - defines the action ABI for delete/subsume and the migration surface for the
   legacy Rust API types, even if those APIs break;
+- defines the abstract primitive/action capability boundary for rule queries,
+  rule actions, global queries, and global actions without locking in PR #856's
+  exact API;
 - documents known failing tests and why they are out of scope;
 - avoids committing to a permanent bridge/native mirrored runtime.
 
@@ -386,7 +430,8 @@ The DD runtime scaffold PR is successful if it:
 Do not block the scaffold branch on:
 
 - full equality/rebuild parity beyond the smallest vertical slice;
-- containers;
+- broad container parity, native container matching, and provider-indexed
+  matching;
 - arbitrary scheduler/backoff parity;
 - extraction and proofs;
 - stable/full serialization;
@@ -405,6 +450,9 @@ universe and prove:
 - per-rule freshness and step-visible state diffs against native egglog;
 - one rebuild/canonicalization event over maintained DD traces;
 - one same-id dirty-refresh-style invalidation or equivalent;
+- one coarse dependency-tracked higher-order container callback, such as safe
+  `unstable-vec-map`, that records container id, callback identity, captured
+  args, and relevant state reads;
 - one scheduler materialization boundary;
 - counters for row rewrites, retractions/reinsertions, refresh rows, scheduler
   admissions/skips, frontier lag, trace memory, and compaction.
@@ -413,12 +461,22 @@ The gate should also include, either in the same slice or immediate follow-up,
 the proof-aware planner benchmark: compare naive seminaive delta expansion with
 a dependent lookup plan on A/B/C-shaped functional-dependency cases.
 
+After the ownership gate, run an extension-readiness probe rather than selecting
+stable syntax immediately. That probe should show the backend can host at least
+one container-HOF strategy, one provider-indexed container strategy, one binary
+recursive/fixpoint strategy, one query-defined primitive or lambda, one
+solver-backed scalar constraint, and one schedule-aware derived view, as scoped
+in [`dd-refactor-high-level-fixes.md`](dd-refactor-high-level-fixes.md).
+
 ## Implementation PR Sequence
 
 1. **Backend scaffold PR**
    - Introduce `src/backend/` and backend-neutral context traits.
    - Keep native/oracle support only for tests or local comparison.
    - No production two-backend switch is required for the final branch.
+   - Define abstract capability contexts for rule queries, rule actions, global
+     queries, and global actions as semantic requirements, treating PR #856 as
+     evidence rather than as a required API.
    - Inventory intentional Rust API breaks and replacement backend-facing
      concepts for extension APIs.
 
@@ -431,9 +489,9 @@ a dependent lookup plan on A/B/C-shaped functional-dependency cases.
 
 3. **Core execution vertical slice PR**
    - Compile a subset of `ResolvedCoreRule` into DD fragments.
-   - Support facts, relation joins, repeated variables, pure primitive filters,
-     constructor lookup/default insert, `DefaultVal::Fail`, host-side action
-     application, and per-rule freshness.
+   - Support facts, relation joins, repeated variables, pure primitive filters
+     only, constructor lookup/default insert, `DefaultVal::Fail`, host-side
+     action application after output netting, and per-rule freshness.
    - Include `Delete` and `Subsume` in the backend action ABI.
    - Include scheduler-facing match output, worklist, and barrier interfaces,
      but only implement the default all-matches admission path at first.
@@ -446,7 +504,8 @@ a dependent lookup plan on A/B/C-shaped functional-dependency cases.
 5. **Option 3 ownership-gate PR**
    - Prove the selected universe has single ownership: per-rule freshness,
      rebuild/canonicalization on maintained DD traces, dirty-refresh-style
-     invalidation, scheduler materialization, and native-oracle state diffs.
+     invalidation, one dependency-tracked higher-order container callback,
+     scheduler materialization, and native-oracle state diffs.
    - Include the proof-aware planner benchmark or record it as the immediate
      follow-up for the gate.
 
@@ -456,18 +515,31 @@ a dependent lookup plan on A/B/C-shaped functional-dependency cases.
      worklist/barrier interface.
 
 7. **Container/API parity PRs**
-   - Port container dirty refresh, extraction, serialization, proof hooks,
-     push/pop, Rust primitive APIs, Rust rules, and replacement public API
-     surfaces.
+   - Port broad native container matching, provider-indexed container matching,
+     extraction, serialization, proof hooks, push/pop, Rust primitive APIs, Rust
+     rules, and replacement public API surfaces.
 
-8. **Cleanup PR**
+8. **Extension-readiness probe PR**
+   - Demonstrate that the backend hooks can host the A/C, query-primitive,
+     solver, and schedule-view experiments from
+     [`dd-refactor-high-level-fixes.md`](dd-refactor-high-level-fixes.md)
+     without stabilizing their syntax.
+
+9. **Cleanup PR**
    - Remove production dependency on `egglog-bridge`.
    - Remove or archive `core-relations` once all reused pieces have been moved or
      replaced.
 
 ## Metrics Required Before Performance Claims
 
+The scaffold does not need to prove a performance win. Before claiming a
+mergeable backend path, it does need a smoke comparison that either rules out or
+explains major hot-path regressions, especially in primitive dispatch,
+Rust-rule/action paths, and the selected DD vertical slice.
+
 - rule-fragment build latency;
+- primitive dispatch timing;
+- Rust-rule/action hot-path timing;
 - per-rule probe lag and logical frontier lag;
 - trace memory/RSS;
 - logical and physical compaction frontiers;
@@ -488,15 +560,18 @@ a dependent lookup plan on A/B/C-shaped functional-dependency cases.
 - The old bridge/core-relations layers should not survive as permanent
   architecture boundaries.
 - The first scaffold must support facts, function rows, constructor defaults,
-  `DefaultVal::Fail`, primitive filters/actions, per-rule freshness, output
-  netting, delete/subsume action ABI shape, and Rust API migration inventory.
+  `DefaultVal::Fail`, pure primitive filters, host-side actions after output
+  netting, per-rule freshness, delete/subsume action ABI shape, and Rust API
+  migration inventory. Hidden reads belong in explicit query atoms, declared
+  dependencies, provider deltas, or later extension work.
 - The separate Option 3 ownership gate must own per-rule freshness, one
   rebuild/canonicalization event over maintained DD traces, one
-  dirty-refresh-style invalidation, one scheduler materialization boundary, and
-  native-oracle comparison.
+  dirty-refresh-style invalidation, one dependency-tracked higher-order
+  container callback, one scheduler materialization boundary, and native-oracle
+  comparison.
 - The first scaffold may knowingly fail extraction, proofs, stable/full
-  serialization parity, broad containers, arbitrary schedulers, push/pop, and
-  legacy Rust API compatibility.
+  serialization parity, broad containers/native container matching, arbitrary
+  schedulers, push/pop, and legacy Rust API compatibility.
 - Follow-up prototypes now pass for lifecycle churn, production-shaped
   lifecycle, replayable rebuild deltas, delete/subsume, container dirty refresh,
   and scheduler materialization. Further work should turn these contracts into
