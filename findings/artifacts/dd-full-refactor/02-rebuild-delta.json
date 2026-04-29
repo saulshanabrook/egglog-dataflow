@@ -1,0 +1,81 @@
+{
+  "experiment": "dd-full-refactor/rebuild-delta",
+  "status": "pass",
+  "command": "code/dd-design-spike/target/debug/rebuild_delta --out findings/artifacts/dd-full-refactor/02-rebuild-delta.json",
+  "configs": [
+    {
+      "deterministic": true,
+      "scenario": "one constructor/dependent table, union b into a, rewrite f(b)->y, merge y into x on f(a) collision",
+      "uses_differential_dataflow": false
+    }
+  ],
+  "metrics": {
+    "constructor_rows": [
+      {
+        "id": 1,
+        "symbol": "a"
+      },
+      {
+        "id": 2,
+        "symbol": "b"
+      },
+      {
+        "id": 10,
+        "symbol": "x"
+      },
+      {
+        "id": 20,
+        "symbol": "y"
+      }
+    ],
+    "displaced_events": [
+      {
+        "new": 1,
+        "old": 2
+      },
+      {
+        "new": 10,
+        "old": 20
+      }
+    ],
+    "final_live_rows": [
+      {
+        "arg": 1,
+        "result": 10
+      }
+    ],
+    "fixed_point_iterations": 2,
+    "insertions": 1,
+    "merges": 1,
+    "retractions": 1,
+    "rewrites": 1,
+    "row_deltas": [
+      {
+        "diff": -1,
+        "row": {
+          "arg": 2,
+          "result": 20
+        }
+      },
+      {
+        "diff": 1,
+        "row": {
+          "arg": 1,
+          "result": 20
+        }
+      }
+    ],
+    "rss_kb": 1888
+  },
+  "observations": [
+    "A displaced-id event is enough to find affected dependent rows through a reverse index.",
+    "The rewrite protocol emits an explicit -old_row/+new_row signed delta pair before resolving the collision.",
+    "A key collision on the rewritten dependent row runs merge and queues the resulting displaced-id event for the same fixed-point loop."
+  ],
+  "decision": "Canonical-map rebuild can be modeled as a delta protocol: displaced ids drive reverse-index row rewrites, and rewritten dependent-row collisions become further id merges.",
+  "limitations": [
+    "This is an in-memory deterministic model, not a Differential Dataflow implementation.",
+    "The scenario covers one dependent-table collision shape and does not exercise multi-column keys or multiplicities greater than one."
+  ],
+  "next_action": "Map the same displaced-id and signed-row-delta protocol onto the planned maintained-view/rebuild design."
+}

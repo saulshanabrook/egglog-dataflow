@@ -14,6 +14,7 @@ index for deeper conclusions, methodology, option analysis, and source notes.
 | [synthesis.md](synthesis.md) | Consolidated evidence, continue/stop criteria, and possible next evidence-gathering work. |
 | [option-3-experiments.md](option-3-experiments.md) | Runnable Option 3 scheduling-overlap reproducibility log. |
 | [option-3-experiment-findings.md](option-3-experiment-findings.md) | Canonical interpretation of what the Option 3 experiments show. |
+| [dd-full-refactor-design-spike.md](dd-full-refactor-design-spike.md) | Full-refactor design spike for replacing the egglog backend with a DD-owned runtime. |
 | [experiments/option-3/README.md](experiments/option-3/README.md) | Generated ordered index of the Option 3 lane artifacts. |
 | [2026-04-29-egglog-on-gpu-meeting-prep.md](2026-04-29-egglog-on-gpu-meeting-prep.md) | Concise prep note for the April 29, 2026 egglog-on-GPU discussion. |
 | [options/README.md](options/README.md) | Tradeoff analysis of the backend boundary paths. |

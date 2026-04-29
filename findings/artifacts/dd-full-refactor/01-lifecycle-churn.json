@@ -1,0 +1,150 @@
+{
+  "experiment": "dd-lifecycle-churn",
+  "status": "pass",
+  "command": "code/dd-design-spike/target/debug/lifecycle_churn --out findings/artifacts/dd-full-refactor/01-lifecycle-churn.json",
+  "configs": [
+    {
+      "build_ms": 0,
+      "compaction": {
+        "logical_frontier": 1,
+        "physical_frontier": 1
+      },
+      "correctness_count": 10,
+      "elapsed_ms": 10,
+      "expected_correctness_count": 10,
+      "fragments": 10,
+      "frontier_final": [
+        1
+      ],
+      "frontier_samples": 10,
+      "installed_after_drop": [],
+      "probe_completions": 10,
+      "retained_installed_dataflows": 0,
+      "rss_kb": 4304,
+      "step_count": 30,
+      "workers": 1
+    },
+    {
+      "build_ms": 0,
+      "compaction": {
+        "logical_frontier": 1,
+        "physical_frontier": 1
+      },
+      "correctness_count": 100,
+      "elapsed_ms": 34,
+      "expected_correctness_count": 100,
+      "fragments": 100,
+      "frontier_final": [
+        1
+      ],
+      "frontier_samples": 100,
+      "installed_after_drop": [],
+      "probe_completions": 100,
+      "retained_installed_dataflows": 0,
+      "rss_kb": 4480,
+      "step_count": 300,
+      "workers": 1
+    },
+    {
+      "build_ms": 0,
+      "compaction": {
+        "logical_frontier": 1,
+        "physical_frontier": 1
+      },
+      "correctness_count": 1000,
+      "elapsed_ms": 233,
+      "expected_correctness_count": 1000,
+      "fragments": 1000,
+      "frontier_final": [
+        1
+      ],
+      "frontier_samples": 1000,
+      "installed_after_drop": [],
+      "probe_completions": 1000,
+      "retained_installed_dataflows": 0,
+      "rss_kb": 4480,
+      "step_count": 3000,
+      "workers": 1
+    },
+    {
+      "build_ms": 0,
+      "compaction": {
+        "logical_frontier": 1,
+        "physical_frontier": 1
+      },
+      "correctness_count": 10,
+      "elapsed_ms": 3,
+      "expected_correctness_count": 10,
+      "fragments": 10,
+      "frontier_final": [
+        1
+      ],
+      "frontier_samples": 40,
+      "installed_after_drop": [],
+      "probe_completions": 40,
+      "retained_installed_dataflows": 0,
+      "rss_kb": 4768,
+      "step_count": 1890,
+      "workers": 4
+    },
+    {
+      "build_ms": 0,
+      "compaction": {
+        "logical_frontier": 1,
+        "physical_frontier": 1
+      },
+      "correctness_count": 100,
+      "elapsed_ms": 31,
+      "expected_correctness_count": 100,
+      "fragments": 100,
+      "frontier_final": [
+        1
+      ],
+      "frontier_samples": 400,
+      "installed_after_drop": [],
+      "probe_completions": 400,
+      "retained_installed_dataflows": 0,
+      "rss_kb": 4848,
+      "step_count": 29276,
+      "workers": 4
+    },
+    {
+      "build_ms": 2,
+      "compaction": {
+        "logical_frontier": 1,
+        "physical_frontier": 1
+      },
+      "correctness_count": 1000,
+      "elapsed_ms": 315,
+      "expected_correctness_count": 1000,
+      "fragments": 1000,
+      "frontier_final": [
+        1
+      ],
+      "frontier_samples": 4000,
+      "installed_after_drop": [],
+      "probe_completions": 4000,
+      "retained_installed_dataflows": 0,
+      "rss_kb": 4944,
+      "step_count": 311304,
+      "workers": 4
+    }
+  ],
+  "metrics": {
+    "max_elapsed_ms": 315,
+    "max_rss_kb": 4944,
+    "total_correctness_count": 2220,
+    "total_fragments": 2220
+  },
+  "observations": [
+    "Each generated fragment was installed as a separate Timely/DD dataflow and explicitly dropped after probe completion.",
+    "All checked dataflow identifiers were absent from installed_dataflows after drop.",
+    "Trace compaction frontiers and final probe frontiers were recorded for every worker/fragment configuration."
+  ],
+  "decision": "Compiled generated fragments remain viable for the bounded lifecycle churn model.",
+  "limitations": [
+    "The model uses deterministic u64 rows and one output per fragment, not production egglog rules.",
+    "The run validates lifecycle churn and retained dataflow state, not end-to-end compilation latency."
+  ],
+  "next_action": "Keep compiled fragments in the design path unless a larger production-shaped lifecycle run retains dropped dataflows or fails probe completion."
+}

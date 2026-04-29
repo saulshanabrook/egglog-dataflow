@@ -1,0 +1,143 @@
+{
+  "experiment": "delete_subsume_signed_diff",
+  "status": "pass",
+  "command": "code/dd-design-spike/target/debug/delete_subsume --out findings/artifacts/dd-full-refactor/03-delete-subsume.json",
+  "configs": [
+    {
+      "deterministic": true,
+      "model": "in_memory_signed_diff",
+      "workers": 1
+    }
+  ],
+  "metrics": {
+    "active_rows": 1,
+    "all_rows": 3,
+    "delete_count": 1,
+    "delete_noops": 1,
+    "live_rows": 2,
+    "provenance_rows": 3,
+    "rss_kb": 1792,
+    "signed_diffs": [
+      {
+        "diff": 1,
+        "row": {
+          "key": "delete-idempotent",
+          "provenance": "assert-1",
+          "value": "alive-then-deleted"
+        },
+        "view": "live"
+      },
+      {
+        "diff": 1,
+        "row": {
+          "key": "delete-idempotent",
+          "provenance": "assert-1",
+          "value": "alive-then-deleted"
+        },
+        "view": "active"
+      },
+      {
+        "diff": 1,
+        "row": {
+          "key": "delete-idempotent",
+          "provenance": "assert-1",
+          "value": "alive-then-deleted"
+        },
+        "view": "all_rows"
+      },
+      {
+        "diff": -1,
+        "row": {
+          "key": "delete-idempotent",
+          "provenance": "assert-1",
+          "value": "alive-then-deleted"
+        },
+        "view": "live"
+      },
+      {
+        "diff": -1,
+        "row": {
+          "key": "delete-idempotent",
+          "provenance": "assert-1",
+          "value": "alive-then-deleted"
+        },
+        "view": "active"
+      },
+      {
+        "diff": 1,
+        "row": {
+          "key": "subsumed",
+          "provenance": "assert-2",
+          "value": "kept-for-proof"
+        },
+        "view": "live"
+      },
+      {
+        "diff": 1,
+        "row": {
+          "key": "subsumed",
+          "provenance": "assert-2",
+          "value": "kept-for-proof"
+        },
+        "view": "active"
+      },
+      {
+        "diff": 1,
+        "row": {
+          "key": "subsumed",
+          "provenance": "assert-2",
+          "value": "kept-for-proof"
+        },
+        "view": "all_rows"
+      },
+      {
+        "diff": -1,
+        "row": {
+          "key": "subsumed",
+          "provenance": "assert-2",
+          "value": "kept-for-proof"
+        },
+        "view": "active"
+      },
+      {
+        "diff": 1,
+        "row": {
+          "key": "survivor",
+          "provenance": "assert-3",
+          "value": "still-active"
+        },
+        "view": "live"
+      },
+      {
+        "diff": 1,
+        "row": {
+          "key": "survivor",
+          "provenance": "assert-3",
+          "value": "still-active"
+        },
+        "view": "active"
+      },
+      {
+        "diff": 1,
+        "row": {
+          "key": "survivor",
+          "provenance": "assert-3",
+          "value": "still-active"
+        },
+        "view": "all_rows"
+      }
+    ],
+    "subsume_count": 1
+  },
+  "observations": [
+    "Hard delete removes the current live row by key and emits a negative live diff.",
+    "A repeated hard delete for the same key is a no-op and does not emit another diff.",
+    "Subsume emits a negative active diff only; live, all-row, and provenance visibility remain."
+  ],
+  "decision": "Pass: delete and subsume can be represented as signed diffs while retaining all-row/provenance visibility.",
+  "limitations": [
+    "This spike uses an in-memory model rather than a Differential Dataflow arrangement.",
+    "The scenario covers one deterministic row per operation class, not concurrent updates."
+  ],
+  "next_action": "Map the signed-diff state transitions onto the candidate DD relation layout."
+}

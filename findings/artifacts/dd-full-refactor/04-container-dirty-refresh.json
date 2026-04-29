@@ -1,0 +1,84 @@
+{
+  "experiment": "same-id-container-dirty-refresh",
+  "status": "pass",
+  "command": "code/dd-design-spike/target/debug/container_dirty_refresh --out findings/artifacts/dd-full-refactor/04-container-dirty-refresh.json",
+  "configs": [
+    {
+      "container_after": {
+        "canonical_contents": "canonical:{a,c}",
+        "id": 7
+      },
+      "container_before": {
+        "canonical_contents": "canonical:{a,b}",
+        "id": 7
+      },
+      "freshness_filter": "row_ts > last_run",
+      "last_run": 10,
+      "parent_row_before": {
+        "container_id": 7,
+        "parent_id": 1,
+        "row_ts": 10
+      }
+    }
+  ],
+  "metrics": {
+    "dirty_ids": [
+      7
+    ],
+    "insertions": [
+      {
+        "diff": 1,
+        "event_ts": 11,
+        "row": {
+          "container_id": 7,
+          "parent_id": 1,
+          "row_ts": 11
+        }
+      }
+    ],
+    "logical_value_unchanged": true,
+    "matches_seen_after_refresh": [
+      {
+        "last_run": 10,
+        "row": {
+          "container_id": 7,
+          "parent_id": 1,
+          "row_ts": 11
+        }
+      }
+    ],
+    "next_ts": 11,
+    "old_ts": 10,
+    "refreshed_rows": [
+      {
+        "container_id": 7,
+        "parent_id": 1,
+        "row_ts": 11
+      }
+    ],
+    "retractions": [
+      {
+        "diff": -1,
+        "event_ts": 10,
+        "row": {
+          "container_id": 7,
+          "parent_id": 1,
+          "row_ts": 10
+        }
+      }
+    ],
+    "row_ts_advanced": true,
+    "rss_kb": 1744
+  },
+  "observations": [
+    "Container id remains stable while canonical contents change.",
+    "Dirty refresh emits -parent@old_ts and +same-logical-parent@next_ts.",
+    "The next seminaive pass sees the refreshed parent through row_ts freshness."
+  ],
+  "decision": "Pass: same-id container semantic changes require explicit parent retimestamping.",
+  "limitations": [
+    "This is an in-memory signed-diff model, not a Differential Dataflow trace.",
+    "The scenario covers one parent row and one dirty container id."
+  ],
+  "next_action": "Use this as the minimal acceptance case for any DD design that owns container dirty refresh."
+}

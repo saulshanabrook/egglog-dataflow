@@ -1,0 +1,45 @@
+{
+  "experiment": "scheduler-materialization",
+  "status": "pass",
+  "command": "code/dd-design-spike/target/debug/scheduler_materialization --out findings/artifacts/dd-full-refactor/05-scheduler-materialization.json",
+  "configs": [
+    {
+      "deterministic_order": "match_id",
+      "model": "in-memory scheduler over complete DD match output",
+      "round_admission_limits": [
+        3,
+        1
+      ]
+    }
+  ],
+  "metrics": {
+    "action_rows": 4,
+    "barrier_count": 2,
+    "complete_matches": 5,
+    "final_residual_match_ids": [
+      5
+    ],
+    "pre_barrier_action_attempts": 2,
+    "residual_matches": 1,
+    "round_2_residual_input_match_ids": [
+      4,
+      5
+    ],
+    "rounds": 2,
+    "rss_kb": 1776,
+    "selected_matches": 4,
+    "worklist_rows": 4
+  },
+  "observations": [
+    "DD-side complete match output can remain separate from scheduler admission.",
+    "Only selected matches are written back into the host worklist.",
+    "Action rows are produced only after an explicit scheduler barrier.",
+    "Skipped matches remain residual input for a later scheduler round."
+  ],
+  "decision": "Scheduler materialization support should be designed before the first DD backend PR.",
+  "limitations": [
+    "This is an in-memory control-plane model, not a Differential Dataflow operator graph.",
+    "The scenario validates scheduler semantics but does not measure throughput."
+  ],
+  "next_action": "Carry selected-match admission, worklist writeback, barrier-delayed actions, and residual retention into the backend interface plan."
+}
