@@ -1,0 +1,744 @@
+{
+  "experiment": "resolved-core-rule-canary",
+  "status": "pass-with-findings",
+  "command": "repos/egglog/target/debug/dd-core-rule-canary --out findings/artifacts/dd-full-refactor/07-resolved-core-rule-canary.json",
+  "corpus": [
+    {
+      "name": "path-no-print",
+      "path": "tests/web-demo/path.egg",
+      "transform": "strip-print-function",
+      "parse_run": {
+        "status": "ok",
+        "outputs": 1
+      },
+      "rule_count": 2,
+      "unsupported_rule_count": 0,
+      "conditional_rule_count": 0,
+      "metrics": {
+        "action_let": 2,
+        "body_atoms": 3,
+        "body_function_atoms": 3,
+        "rules_lowered": 2
+      },
+      "rules": [
+        {
+          "ruleset": "",
+          "rule": "(rule ((edge x y))\n      ((path x y))\n         )",
+          "span": "In 4:1-5:19 of path.egg: (rule ((edge x y))\n      ((path x y)))",
+          "scaffold_status": "supported",
+          "conditional_requirements": [],
+          "unsupported": [],
+          "body_atoms": [
+            {
+              "call": {
+                "kind": "function",
+                "name": "edge",
+                "subtype": "constructor",
+                "input_sorts": [
+                  "i64",
+                  "i64"
+                ],
+                "output_sort": "@edgeSort"
+              },
+              "args": [
+                {
+                  "kind": "var",
+                  "name": "x",
+                  "sort": "i64"
+                },
+                {
+                  "kind": "var",
+                  "name": "y",
+                  "sort": "i64"
+                },
+                {
+                  "kind": "var",
+                  "name": "@edge1",
+                  "sort": "@edgeSort"
+                }
+              ]
+            }
+          ],
+          "actions": [
+            {
+              "kind": "Let",
+              "var": "@path1",
+              "call": {
+                "kind": "function",
+                "name": "path",
+                "subtype": "constructor",
+                "input_sorts": [
+                  "i64",
+                  "i64"
+                ],
+                "output_sort": "@pathSort"
+              },
+              "args": [
+                {
+                  "kind": "var",
+                  "name": "x",
+                  "sort": "i64"
+                },
+                {
+                  "kind": "var",
+                  "name": "y",
+                  "sort": "i64"
+                }
+              ],
+              "scaffold_status": "host-eval"
+            }
+          ]
+        },
+        {
+          "ruleset": "",
+          "rule": "(rule ((path x y)\n       (edge y z))\n      ((path x z))\n         )",
+          "span": "In 7:1-8:19 of path.egg: (rule ((path x y) (edge y z))\n      ((path x z)))",
+          "scaffold_status": "supported",
+          "conditional_requirements": [],
+          "unsupported": [],
+          "body_atoms": [
+            {
+              "call": {
+                "kind": "function",
+                "name": "path",
+                "subtype": "constructor",
+                "input_sorts": [
+                  "i64",
+                  "i64"
+                ],
+                "output_sort": "@pathSort"
+              },
+              "args": [
+                {
+                  "kind": "var",
+                  "name": "x",
+                  "sort": "i64"
+                },
+                {
+                  "kind": "var",
+                  "name": "y",
+                  "sort": "i64"
+                },
+                {
+                  "kind": "var",
+                  "name": "@path4",
+                  "sort": "@pathSort"
+                }
+              ]
+            },
+            {
+              "call": {
+                "kind": "function",
+                "name": "edge",
+                "subtype": "constructor",
+                "input_sorts": [
+                  "i64",
+                  "i64"
+                ],
+                "output_sort": "@edgeSort"
+              },
+              "args": [
+                {
+                  "kind": "var",
+                  "name": "y",
+                  "sort": "i64"
+                },
+                {
+                  "kind": "var",
+                  "name": "z",
+                  "sort": "i64"
+                },
+                {
+                  "kind": "var",
+                  "name": "@edge3",
+                  "sort": "@edgeSort"
+                }
+              ]
+            }
+          ],
+          "actions": [
+            {
+              "kind": "Let",
+              "var": "@path5",
+              "call": {
+                "kind": "function",
+                "name": "path",
+                "subtype": "constructor",
+                "input_sorts": [
+                  "i64",
+                  "i64"
+                ],
+                "output_sort": "@pathSort"
+              },
+              "args": [
+                {
+                  "kind": "var",
+                  "name": "x",
+                  "sort": "i64"
+                },
+                {
+                  "kind": "var",
+                  "name": "z",
+                  "sort": "i64"
+                }
+              ],
+              "scaffold_status": "host-eval"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "relation-query-allowed",
+      "path": "tests/relation-query-allowed.egg",
+      "transform": "none",
+      "parse_run": {
+        "status": "ok",
+        "outputs": 1
+      },
+      "rule_count": 2,
+      "unsupported_rule_count": 0,
+      "conditional_rule_count": 0,
+      "metrics": {
+        "action_let": 2,
+        "action_let_atom_term": 2,
+        "body_atoms": 3,
+        "body_function_atoms": 3,
+        "rules_lowered": 2
+      },
+      "rules": [
+        {
+          "ruleset": "",
+          "rule": "(rule ((= (myrel 1) (myrel 1)))\n      ((shouldappear ))\n         )",
+          "span": "In 14:1-15:23 of relation-query-allowed.egg: (rule ((= (myrel 1) (myrel 1)))\n      ((shouldappear)))",
+          "scaffold_status": "supported",
+          "conditional_requirements": [],
+          "unsupported": [],
+          "body_atoms": [
+            {
+              "call": {
+                "kind": "function",
+                "name": "myrel",
+                "subtype": "constructor",
+                "input_sorts": [
+                  "i64"
+                ],
+                "output_sort": "@myrelSort"
+              },
+              "args": [
+                {
+                  "kind": "literal",
+                  "value": "1"
+                },
+                {
+                  "kind": "var",
+                  "name": "@myrel7",
+                  "sort": "@myrelSort"
+                }
+              ]
+            }
+          ],
+          "actions": [
+            {
+              "kind": "LetAtomTerm",
+              "var": "@myrel6",
+              "term": {
+                "kind": "var",
+                "name": "@myrel7",
+                "sort": "@myrelSort"
+              },
+              "scaffold_status": "supported"
+            },
+            {
+              "kind": "Let",
+              "var": "@shouldappear1",
+              "call": {
+                "kind": "function",
+                "name": "shouldappear",
+                "subtype": "constructor",
+                "input_sorts": [],
+                "output_sort": "@shouldappearSort"
+              },
+              "args": [],
+              "scaffold_status": "host-eval"
+            }
+          ]
+        },
+        {
+          "ruleset": "",
+          "rule": "(rule ((= (myrel 1) (myrel 2)))\n      ((shouldnotappear ))\n         )",
+          "span": "In 17:1-18:26 of relation-query-allowed.egg: (rule ((= (myrel 1) (myrel 2)))\n      ((shouldnotappear)))",
+          "scaffold_status": "supported",
+          "conditional_requirements": [],
+          "unsupported": [],
+          "body_atoms": [
+            {
+              "call": {
+                "kind": "function",
+                "name": "myrel",
+                "subtype": "constructor",
+                "input_sorts": [
+                  "i64"
+                ],
+                "output_sort": "@myrelSort"
+              },
+              "args": [
+                {
+                  "kind": "literal",
+                  "value": "1"
+                },
+                {
+                  "kind": "var",
+                  "name": "@myrel11",
+                  "sort": "@myrelSort"
+                }
+              ]
+            },
+            {
+              "call": {
+                "kind": "function",
+                "name": "myrel",
+                "subtype": "constructor",
+                "input_sorts": [
+                  "i64"
+                ],
+                "output_sort": "@myrelSort"
+              },
+              "args": [
+                {
+                  "kind": "literal",
+                  "value": "2"
+                },
+                {
+                  "kind": "var",
+                  "name": "@myrel11",
+                  "sort": "@myrelSort"
+                }
+              ]
+            }
+          ],
+          "actions": [
+            {
+              "kind": "LetAtomTerm",
+              "var": "@myrel10",
+              "term": {
+                "kind": "var",
+                "name": "@myrel11",
+                "sort": "@myrelSort"
+              },
+              "scaffold_status": "supported"
+            },
+            {
+              "kind": "Let",
+              "var": "@shouldnotappear1",
+              "call": {
+                "kind": "function",
+                "name": "shouldnotappear",
+                "subtype": "constructor",
+                "input_sorts": [],
+                "output_sort": "@shouldnotappearSort"
+              },
+              "args": [],
+              "scaffold_status": "host-eval"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "bool",
+      "path": "tests/bool.egg",
+      "transform": "none",
+      "parse_run": {
+        "status": "ok",
+        "outputs": 1
+      },
+      "rule_count": 1,
+      "unsupported_rule_count": 0,
+      "conditional_rule_count": 0,
+      "metrics": {
+        "action_set": 1,
+        "body_atoms": 1,
+        "body_function_atoms": 1,
+        "rules_lowered": 1
+      },
+      "rules": [
+        {
+          "ruleset": "",
+          "rule": "(rule ((R i))\n      ((set (F i) true))\n         )",
+          "span": "In 32:1-35:1 of bool.egg: (rule\n    ((R i))\n    ((set (F i) true))\n)",
+          "scaffold_status": "supported",
+          "conditional_requirements": [],
+          "unsupported": [],
+          "body_atoms": [
+            {
+              "call": {
+                "kind": "function",
+                "name": "R",
+                "subtype": "constructor",
+                "input_sorts": [
+                  "i64"
+                ],
+                "output_sort": "@RSort"
+              },
+              "args": [
+                {
+                  "kind": "var",
+                  "name": "i",
+                  "sort": "i64"
+                },
+                {
+                  "kind": "var",
+                  "name": "@R1",
+                  "sort": "@RSort"
+                }
+              ]
+            }
+          ],
+          "actions": [
+            {
+              "kind": "Set",
+              "call": {
+                "kind": "function",
+                "name": "F",
+                "subtype": "function",
+                "input_sorts": [
+                  "i64"
+                ],
+                "output_sort": "bool"
+              },
+              "args": [
+                {
+                  "kind": "var",
+                  "name": "i",
+                  "sort": "i64"
+                }
+              ],
+              "value": {
+                "kind": "literal",
+                "value": "true"
+              },
+              "scaffold_status": "supported-host-action"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "i64",
+      "path": "tests/i64.egg",
+      "transform": "none",
+      "parse_run": {
+        "status": "ok",
+        "outputs": 0
+      },
+      "rule_count": 0,
+      "unsupported_rule_count": 0,
+      "conditional_rule_count": 0,
+      "metrics": {},
+      "rules": []
+    },
+    {
+      "name": "primitives",
+      "path": "tests/primitives.egg",
+      "transform": "none",
+      "parse_run": {
+        "status": "ok",
+        "outputs": 0
+      },
+      "rule_count": 0,
+      "unsupported_rule_count": 0,
+      "conditional_rule_count": 0,
+      "metrics": {},
+      "rules": []
+    },
+    {
+      "name": "primitive-filter-no-panic",
+      "path": "tests/repro-primitive-query.egg",
+      "transform": "primitive-filter-no-panic",
+      "parse_run": {
+        "status": "ok",
+        "outputs": 1
+      },
+      "rule_count": 1,
+      "unsupported_rule_count": 0,
+      "conditional_rule_count": 1,
+      "metrics": {
+        "action_let": 1,
+        "action_let_atom_term": 1,
+        "body_atoms": 3,
+        "body_function_atoms": 2,
+        "body_primitive_atoms": 1,
+        "conditional_rules": 1,
+        "rules_lowered": 1
+      },
+      "rules": [
+        {
+          "ruleset": "",
+          "rule": "(rule ((Num ?a)\n       (Num ?b)\n       (= (+ ?a ?b) 5))\n      ((primitive-filter-hit ))\n         )",
+          "span": "In 8:1-11:27 of repro-primitive-query.egg: (rule ((Num ?a)\n       (Num ?b)\n       (= (+ ?a ?b) 5))\n  ((primitive-filter-hit)))",
+          "scaffold_status": "conditional",
+          "conditional_requirements": [
+            "query primitive requires pure/admitted primitive metadata"
+          ],
+          "unsupported": [],
+          "body_atoms": [
+            {
+              "call": {
+                "kind": "function",
+                "name": "Num",
+                "subtype": "constructor",
+                "input_sorts": [
+                  "i64"
+                ],
+                "output_sort": "Math"
+              },
+              "args": [
+                {
+                  "kind": "var",
+                  "name": "?a",
+                  "sort": "i64"
+                },
+                {
+                  "kind": "var",
+                  "name": "@Num6",
+                  "sort": "Math"
+                }
+              ]
+            },
+            {
+              "call": {
+                "kind": "function",
+                "name": "Num",
+                "subtype": "constructor",
+                "input_sorts": [
+                  "i64"
+                ],
+                "output_sort": "Math"
+              },
+              "args": [
+                {
+                  "kind": "var",
+                  "name": "?b",
+                  "sort": "i64"
+                },
+                {
+                  "kind": "var",
+                  "name": "@Num7",
+                  "sort": "Math"
+                }
+              ]
+            },
+            {
+              "call": {
+                "kind": "primitive",
+                "name": "+",
+                "input_sorts": [
+                  "i64",
+                  "i64"
+                ],
+                "output_sort": "i64"
+              },
+              "args": [
+                {
+                  "kind": "var",
+                  "name": "?a",
+                  "sort": "i64"
+                },
+                {
+                  "kind": "var",
+                  "name": "?b",
+                  "sort": "i64"
+                },
+                {
+                  "kind": "literal",
+                  "value": "5"
+                }
+              ]
+            }
+          ],
+          "actions": [
+            {
+              "kind": "LetAtomTerm",
+              "var": "@+1",
+              "term": {
+                "kind": "literal",
+                "value": "5"
+              },
+              "scaffold_status": "supported"
+            },
+            {
+              "kind": "Let",
+              "var": "@primitive-filter-hit1",
+              "call": {
+                "kind": "function",
+                "name": "primitive-filter-hit",
+                "subtype": "constructor",
+                "input_sorts": [],
+                "output_sort": "@primitivefilterhitSort"
+              },
+              "args": [],
+              "scaffold_status": "host-eval"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "repro-primitive-query",
+      "path": "tests/repro-primitive-query.egg",
+      "transform": "none",
+      "parse_run": {
+        "status": "ok",
+        "outputs": 1
+      },
+      "rule_count": 1,
+      "unsupported_rule_count": 1,
+      "conditional_rule_count": 0,
+      "metrics": {
+        "action_let_atom_term": 1,
+        "action_panic": 1,
+        "body_atoms": 3,
+        "body_function_atoms": 2,
+        "body_primitive_atoms": 1,
+        "rules_lowered": 1,
+        "unsupported_rules": 1
+      },
+      "rules": [
+        {
+          "ruleset": "",
+          "rule": "(rule ((Num ?a)\n       (Num ?b)\n       (= (+ ?a ?b) 5))\n      ((panic 'should not have matched'))\n         )",
+          "span": "In 7:1-10:38 of repro-primitive-query.egg: (rule ((Num ?a)\n       (Num ?b)\n       (= (+ ?a ?b) 5))\n  ((panic \"should not have matched\")))",
+          "scaffold_status": "unsupported",
+          "conditional_requirements": [
+            "query primitive requires pure/admitted primitive metadata"
+          ],
+          "unsupported": [
+            "Panic action is not in the first DD scaffold action set"
+          ],
+          "body_atoms": [
+            {
+              "call": {
+                "kind": "function",
+                "name": "Num",
+                "subtype": "constructor",
+                "input_sorts": [
+                  "i64"
+                ],
+                "output_sort": "Math"
+              },
+              "args": [
+                {
+                  "kind": "var",
+                  "name": "?a",
+                  "sort": "i64"
+                },
+                {
+                  "kind": "var",
+                  "name": "@Num6",
+                  "sort": "Math"
+                }
+              ]
+            },
+            {
+              "call": {
+                "kind": "function",
+                "name": "Num",
+                "subtype": "constructor",
+                "input_sorts": [
+                  "i64"
+                ],
+                "output_sort": "Math"
+              },
+              "args": [
+                {
+                  "kind": "var",
+                  "name": "?b",
+                  "sort": "i64"
+                },
+                {
+                  "kind": "var",
+                  "name": "@Num7",
+                  "sort": "Math"
+                }
+              ]
+            },
+            {
+              "call": {
+                "kind": "primitive",
+                "name": "+",
+                "input_sorts": [
+                  "i64",
+                  "i64"
+                ],
+                "output_sort": "i64"
+              },
+              "args": [
+                {
+                  "kind": "var",
+                  "name": "?a",
+                  "sort": "i64"
+                },
+                {
+                  "kind": "var",
+                  "name": "?b",
+                  "sort": "i64"
+                },
+                {
+                  "kind": "literal",
+                  "value": "5"
+                }
+              ]
+            }
+          ],
+          "actions": [
+            {
+              "kind": "LetAtomTerm",
+              "var": "@+1",
+              "term": {
+                "kind": "literal",
+                "value": "5"
+              },
+              "scaffold_status": "supported"
+            },
+            {
+              "kind": "Panic",
+              "message": "should not have matched",
+              "scaffold_status": "unsupported-gate-1"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "metrics": {
+    "entries": 7,
+    "entries_with_rules": 5,
+    "failed_entries": 0,
+    "totals": {
+      "action_let": 5,
+      "action_let_atom_term": 4,
+      "action_panic": 1,
+      "action_set": 1,
+      "body_atoms": 13,
+      "body_function_atoms": 11,
+      "body_primitive_atoms": 2,
+      "conditional_rules": 1,
+      "rules_lowered": 7,
+      "unsupported_rules": 1
+    }
+  },
+  "observations": [
+    "The Gate 1 corpus can be parsed, run, and lowered through the existing egglog frontend into stored ResolvedCoreRule values.",
+    "The actual rule corpus is smaller than the file list suggests: i64.egg and primitives.egg contain only top-level checks, not rules.",
+    "The lowered rule shapes cover relation joins, constructor/function atoms, repeated-variable/literal arguments, pure primitive query atoms, relation/custom-function Set actions, a no-panic primitive-filter fixture, and one Panic action from the full negative test.",
+    "repro-primitive-query.egg is useful as a negative semantic check, but it is not an execution-only DD scaffold fixture because its lowered action is Panic."
+  ],
+  "decision": "Use this canary as the first scaffold corpus. Keep path-no-print, relation-query-allowed, bool, and a reduced primitive-filter fixture in Gate 1; move full repro-primitive-query.egg behind explicit Panic support or replace it with a no-panic primitive-filter fixture.",
+  "limitations": [
+    "This canary classifies real lowered CoreRule shapes but does not compile or execute DD fragments.",
+    "Primitive purity is not visible in the current public primitive API, so primitive query atoms are marked conditional on a purity/admission check.",
+    "The corpus is Gate 1 only; it does not exercise equality/rebuild, delete/subsume, containers, scheduler admission, extraction, proof, push/pop, or serialization."
+  ],
+  "next_action": "Make the first DD scaffold acceptance require this canary plus one DD lowering pass for all supported Gate 1 rules, with repro-primitive-query either reduced or gated on Panic support."
+}

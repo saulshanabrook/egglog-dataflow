@@ -220,14 +220,19 @@ compaction, not as the only encoding of egglog seminaive freshness.
 
 ### Gate 1: basic DD execution
 
-- add a reduced no-print path fixture derived from
-  `repos/egglog/tests/web-demo/path.egg`, or keep the path case out of Gate 1
-  until `print-function` readback is implemented;
+- run the `dd-core-rule-canary` report and require the supported Gate 1 rules to
+  lower from actual `ResolvedCoreRule` values, not hand-written toy rules;
+- use a reduced no-print path fixture derived from
+  `repos/egglog/tests/web-demo/path.egg`; the full file stays in Gate 5 until
+  `print-function` readback exists;
 - `repos/egglog/tests/relation-query-allowed.egg`
 - `repos/egglog/tests/bool.egg`
-- `repos/egglog/tests/i64.egg`
-- `repos/egglog/tests/primitives.egg`
-- `repos/egglog/tests/repro-primitive-query.egg`
+- `repos/egglog/tests/i64.egg` and `repos/egglog/tests/primitives.egg` as
+  top-level primitive/check smoke only; they do not lower any rules in the
+  current canary corpus;
+- a reduced primitive-filter fixture derived from
+  `repos/egglog/tests/repro-primitive-query.egg` that does not use `panic`, or
+  the full file only after `Panic` is an explicit supported host-side action.
 
 ### Gate 2: equality and direct rewrites
 
@@ -284,9 +289,11 @@ additional output checks, so it is not an execution-only gate.
 
 ## Follow-Up Experiment Results
 
-The follow-up experiments now live under `code/dd-design-spike/src/bin/` and
-emit machine-readable reports under `findings/artifacts/dd-full-refactor/`.
-They are bounded design-spike prototypes, not production backend code.
+Most follow-up experiments live under `code/dd-design-spike/src/bin/`; the
+`ResolvedCoreRule` canary lives in `repos/egglog` because the lowered IR is
+crate-private. They emit machine-readable reports under
+`findings/artifacts/dd-full-refactor/`. They are bounded design-spike prototypes
+and canaries, not production backend code.
 
 | Experiment | Artifact | Result | Design decision |
 | --- | --- | --- | --- |
@@ -296,13 +303,16 @@ They are bounded design-spike prototypes, not production backend code.
 | Delete/subsume signed-diff toy | `findings/artifacts/dd-full-refactor/03-delete-subsume.json` | Pass: hard delete removed the live/active row and was idempotent on repeat; subsume removed only from active view while retaining live/all-row/provenance visibility. | Include delete and subsume view semantics in the first semantic mutation slice instead of treating them as speculative. |
 | Same-id container dirty refresh toy | `findings/artifacts/dd-full-refactor/04-container-dirty-refresh.json` | Pass: a stable container id with changed canonical contents emitted `-parent@old_ts +same-logical-parent@next_ts`, and the refreshed row passed the next seminaive freshness filter. | Container parity still belongs after the first backend slice, but the required dirty-refresh contract is now explicit and testable. |
 | Scheduler materialization toy | `findings/artifacts/dd-full-refactor/05-scheduler-materialization.json` | Pass: complete matches stayed separate from scheduler admission; selected matches wrote to a worklist; actions fired only after barriers; skipped matches remained residual. | Design scheduler admission/worklist/barrier interfaces before the scaffold PR, even if full scheduler parity lands later. |
+| ResolvedCoreRule Gate 1 canary | `findings/artifacts/dd-full-refactor/07-resolved-core-rule-canary.json` | Pass with findings: seven rules from five Gate 1 entries parsed, ran, and lowered into stored `ResolvedCoreRule` values; `i64.egg` and `primitives.egg` contributed no rules; the transformed no-panic primitive-filter rule lowered with a conditional pure/admitted primitive requirement; full `repro-primitive-query.egg` still lowered a `Panic` action. | Proceed from toy lifecycle experiments to real-rule scaffold lowering, but tighten Gate 1: use `path-no-print`, relation-query, bool, and the no-panic primitive-filter fixture unless the scaffold deliberately supports `Panic`. Primitive query atoms still need a pure/admitted primitive check because current primitive purity is not visible in the lowered IR. |
 
 ### Remaining Unknowns
 
 - Lifecycle is validated for synthetic compiled fragments, bounded churn,
   imported shared arrangements, recursive host feedback, and signed-diff output
-  materialization on one narrow workload; still validate real `ResolvedCoreRule`
-  lowering, broader rule shapes, and arbitrary schedules.
+  materialization on one narrow workload. Real `ResolvedCoreRule` lowering is now
+  smoke-validated for the Gate 1 canary corpus, but the DD compiler still has to
+  lower and execute those rules; broader rule shapes and arbitrary schedules
+  remain unvalidated.
 - Rebuild has a replayable in-memory reverse-index collision model, but it still
   must be mapped onto maintained DD traces before becoming the equality/rebuild
   protocol.
@@ -413,6 +423,8 @@ The DD runtime scaffold PR is successful if it:
 
 - runs a small relation/fact/join/action subset from real egglog input through
   `ResolvedCoreRule`, not only through toy prototype code;
+- carries the `dd-core-rule-canary` as a regression report and documents any
+  unsupported lowered atom/action kind before adding it to the scaffold gate;
 - has a long-lived DD runtime with probes, output netting, and relation
   readback;
 - includes metrics for fragment build latency, probe/barrier count, row
@@ -492,6 +504,9 @@ in [`dd-refactor-high-level-fixes.md`](dd-refactor-high-level-fixes.md).
    - Support facts, relation joins, repeated variables, pure primitive filters
      only, constructor lookup/default insert, `DefaultVal::Fail`, host-side
      action application after output netting, and per-rule freshness.
+   - Start from the supported Gate 1 canary rules. Replace the full
+     `repro-primitive-query.egg` with a no-panic primitive-filter fixture unless
+     the PR intentionally supports `Panic`.
    - Include `Delete` and `Subsume` in the backend action ABI.
    - Include scheduler-facing match output, worklist, and barrier interfaces,
      but only implement the default all-matches admission path at first.
@@ -533,9 +548,10 @@ in [`dd-refactor-high-level-fixes.md`](dd-refactor-high-level-fixes.md).
 ## Metrics Required Before Performance Claims
 
 The scaffold does not need to prove a performance win. Before claiming a
-mergeable backend path, it does need a smoke comparison that either rules out or
-explains major hot-path regressions, especially in primitive dispatch,
-Rust-rule/action paths, and the selected DD vertical slice.
+mergeable backend path, it must show no unexplained regression larger than 20%
+on the named comparison workloads below. A larger regression can still be
+acceptable only if it is measured, attributed to a deliberate semantic or
+instrumentation cost, and assigned to a concrete follow-up before merge.
 
 - rule-fragment build latency;
 - primitive dispatch timing;
@@ -550,13 +566,27 @@ Rust-rule/action paths, and the selected DD vertical slice.
 - barrier count by reason;
 - native-oracle state diff at each logical boundary while the oracle exists.
 
+Minimum comparison workload list:
+
+- the supported Gate 1 canary rules from
+  `findings/artifacts/dd-full-refactor/07-resolved-core-rule-canary.json`;
+- the reduced path fixture, `relation-query-allowed.egg`, `bool.egg`, and the
+  no-panic primitive-filter fixture;
+- top-level primitive/check smoke from `i64.egg` and `primitives.egg`;
+- `repos/egglog/benches/rust_api_benchmarking.rs` cases
+  `rust_rule_match_overhead`, `rust_rule_insert_loop`, and
+  `rust_rule_tableaction_hot_path`;
+- the selected DD vertical-slice workload with native-oracle state diffs at each
+  logical boundary.
+
 ## Stop Criteria Answered
 
 - Dynamic per-rule DD graph construction is viable for bounded generated
   fragments and for one production-shaped imported-arrangement/recursive-feedback
   run. Output sinks must materialize net signed diffs before actions; broader
-  control-plane viability still requires real `ResolvedCoreRule` lowering,
-  realistic rule shapes, and arbitrary schedules.
+  control-plane viability still requires DD execution of the real Gate 1
+  `ResolvedCoreRule` canary rules, realistic rule shapes, and arbitrary
+  schedules.
 - The old bridge/core-relations layers should not survive as permanent
   architecture boundaries.
 - The first scaffold must support facts, function rows, constructor defaults,
@@ -574,5 +604,6 @@ Rust-rule/action paths, and the selected DD vertical slice.
   schedulers, push/pop, and legacy Rust API compatibility.
 - Follow-up prototypes now pass for lifecycle churn, production-shaped
   lifecycle, replayable rebuild deltas, delete/subsume, container dirty refresh,
-  and scheduler materialization. Further work should turn these contracts into
+  scheduler materialization, and real Gate 1 `ResolvedCoreRule` shape
+  classification. Further work should turn these contracts into
   production-shaped backend tests rather than repeat the same toy spikes.
