@@ -243,3 +243,41 @@ and relevance to the current external DD trial.
   equality/rebuild mappings but cannot validate the full external trial alone.
 - **Confidence:** High.
 - **Relevance:** Prevents over-scoping the oracle.
+
+## E-022 - Lower Function Rows Are Publicly Exportable
+
+- **Source fact:** `EGraph::function_for_each` is public and delegates to the
+  bridge table iterator by function name. The bridge `FunctionRow` exposes
+  public `vals` and `subsumed` fields, and `vals` slices only the function
+  columns, excluding internal timestamp/subsume table columns.
+- **Source path:** `repos/egglog/src/lib.rs`,
+  `repos/egglog/egglog-bridge/src/lib.rs`
+- **Derived conclusion:** The minimal trial can use lower function-table rows as
+  the native egglog oracle without changing egglog APIs for the first
+  relation-only slice.
+- **Confidence:** High.
+- **Relevance:** Answers the pre-start oracle feasibility question.
+
+## E-023 - `print-function` Is A Display Oracle, Not The Primary Row Oracle
+
+- **Source fact:** `EGraph::print_function` extracts rows through
+  `function_to_dag` and emits `CommandOutput::PrintFunction` with a `TermDag`.
+- **Source path:** `repos/egglog/src/lib.rs`
+- **Derived conclusion:** `print-function` remains useful for human debugging,
+  but it should not be the primary oracle for lower-row DD comparisons.
+- **Confidence:** High.
+- **Relevance:** Prevents conflating rendered/top-level output with lower
+  database state.
+
+## E-024 - The First External Slice Is Relation-Only Reachability
+
+- **Source fact:** `code/minimal-dd-trial` runs native egglog path reachability,
+  exports lower rows through `function_for_each`, projects `i64` relation input
+  tuples as logical rows, and compares those rows against a small DD
+  reachability model.
+- **Source path:** `code/minimal-dd-trial/`
+- **Derived conclusion:** The repo is ready to start coding from a narrow,
+  row-oracle-backed relation slice while leaving equality/rebuild, containers,
+  schedulers, primitives, extraction, and proofs as follow-up probes.
+- **Confidence:** Medium / High.
+- **Relevance:** Converts the mapping preflight into a runnable first gate.

@@ -1,0 +1,20 @@
+[package]
+name = "minimal-dd-trial"
+version = "0.1.0"
+edition = "2021"
+publish = false
+default-run = "oracle-preflight"
+
+[[bin]]
+name = "oracle-preflight"
+path = "src/bin/oracle_preflight.rs"
+
+[dependencies]
+differential-dataflow = { path = "../../repos/differential-dataflow/differential-dataflow" }
+egglog = { path = "../../repos/egglog", default-features = false }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+timely = { path = "../../repos/timely-dataflow/timely" }
+
+[patch.crates-io]
+timely = { path = "../../repos/timely-dataflow/timely" }

@@ -35,7 +35,8 @@ Raw and low-level evidence is preserved in place:
 - `messages/`: design conversations and meeting notes.
 - `papers/`: local papers.
 - `repos/`: vendored source checkouts used as evidence.
-- `code/`: prototypes, including the DD design spike and schedule-overlap code.
+- `code/`: prototypes, including the DD design spike, schedule-overlap code,
+  and the minimal DD trial preflight.
 - `findings/artifacts/`: generated JSON artifacts and measured lane outputs.
 - `findings/source-notes/`: source-cluster notes that record what was read and
   why it matters.

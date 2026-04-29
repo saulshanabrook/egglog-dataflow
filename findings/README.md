@@ -17,6 +17,11 @@ claims are made.
 | [`experiments/option-3/README.md`](experiments/option-3/README.md) | Ordered index of existing Option 3 artifacts and measured lane outputs. |
 | [`archive/2026-04-prior-backend-plans/`](archive/2026-04-prior-backend-plans/) | Superseded synthesized backend-option and scaffold planning docs. |
 
+The current runnable preflight lives in
+[`../code/minimal-dd-trial/`](../code/minimal-dd-trial/). It is intentionally
+small: relation-only reachability, lower-row native oracle export, and a first
+DD comparison (`E-022`, `E-024`).
+
 ## Current Status
 
 The April 29 Eli meeting note changes the active framing from "plan an in-repo

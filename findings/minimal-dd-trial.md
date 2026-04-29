@@ -73,6 +73,47 @@ benchmarks map into DD (`E-001`, `E-002`, `E-003`).
   model explains any part of the mapping better than manual DD lowering remains
   a reading question, not an implementation choice (`E-020`).
 
+## Preflight Mapping Decisions
+
+These decisions are settled enough to start the first relation-only coding
+gate:
+
+- **Oracle readback:** Use lower function-table snapshots from
+  `EGraph::function_for_each` as the primary oracle. `FunctionRow` exposes row
+  values and subsumption status without internal timestamp/subsume columns, so
+  the first slice does not require an egglog API change (`E-002`, `E-022`).
+- **Debug output:** Keep `print-function` only as a display/debug fallback
+  because it routes through `function_to_dag` / `TermDag`, not as the primary
+  lower-row oracle (`E-023`).
+- **Row identity:** For the v0 relation slice, compare logical `i64` input
+  tuples and retain raw lower-row values, output value, sort names, and
+  `subsumed` as debug evidence. Synthetic constructor/e-class output ids are
+  not the logical relation identity (`E-022`, `E-024`).
+- **Initial subset:** Start with `i64` relation facts, relation atoms,
+  repeated-variable filters, joins, and explicit staged `(run ...)` boundaries.
+  Scope out merge/equality, rebuild, containers, custom schedulers, host
+  callbacks, extraction, and proof encoding until the row oracle and relation
+  DD model are working (`E-018`, `E-021`, `E-024`).
+- **Program boundary:** Pair a native `.egg` fixture with a small external trial
+  scenario spec. Do not block the first slice on direct `ResolvedCoreRule`
+  export; use the existing canary evidence to keep the later rule-boundary
+  mapping honest (`E-013`, `E-024`).
+- **Schedule boundary:** Snapshot after explicit native stages and compare
+  final visible rows. Per-rule freshness internals remain a follow-up schedule
+  witness once the relation slice can already compare against native rows
+  (`E-009`, `E-010`, `E-024`).
+
+These questions should be explored after the first row-oracle comparison is
+running:
+
+- equality/rebuild row rewrites and replayable live-row deltas (`E-014`,
+  `E-015`);
+- same-id container refresh (`E-016`);
+- scheduler materialization, admission, residual matches, and delayed actions
+  (`E-017`);
+- hidden primitive or callback reads (`E-018`);
+- WCOJ/hard-join planning and DBSP as an explanatory lens (`E-019`, `E-020`).
+
 ## Benchmark Categories
 
 The April 29 meeting note separates benchmark interpretation into at least
@@ -97,6 +138,8 @@ the first performance comparison:
 
 - Native egglog supplies the supported-program oracle and can generate test
   databases or expected step-visible state (`E-002`).
+- The primary preflight oracle is lower function-table export through
+  `function_for_each`, not rendered `print-function` output (`E-022`, `E-023`).
 - The trial should compare at logical boundaries that matter to egglog:
   per-rule freshness, visible rows, match/action admission, rebuild visibility,
   and final relation/function table state (`E-009`, `E-010`, `E-017`).
@@ -110,13 +153,20 @@ the first performance comparison:
 
 ## Open Planning Inputs
 
-A future MVP plan should choose these, but this doc intentionally does not:
+The mapping preflight resolves these v0 inputs:
 
-- the exact egglog subset;
-- the external crate or artifact shape;
-- the oracle extraction/readback interface;
-- the first benchmark family from the categories above;
+- first subset: relation-only `i64` reachability;
+- external artifact shape: `code/minimal-dd-trial/`;
+- oracle interface: lower rows exported with `function_for_each`;
+- first comparison family: path/reachability;
+- first comparison identity: sorted logical input tuples plus raw lower-row
+  debug evidence (`E-022`, `E-024`).
+
+A future MVP plan still needs to choose:
+
 - the measurement schema for runtime, build/setup cost, rows, diffs, frontiers,
   trace/compaction, and oracle mismatches;
-- the rule shape coverage: top-down patterns, arbitrary joins, multi-patterns,
-  schedules, containers, or hard joins.
+- the rule shape expansion beyond relation reachability: top-down patterns,
+  arbitrary joins, multi-patterns, schedules, containers, or hard joins;
+- whether later rule extraction should consume generated `.egg`, parsed
+  commands, canary JSON, or a public lowered-rule export.

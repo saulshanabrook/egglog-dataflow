@@ -19,6 +19,13 @@ for design decisions (`E-001`, `E-002`, `E-003`).
   performance profiles are explainable (`E-003`).
 - Native egglog should be the oracle and data/source generator for supported
   programs, not a mirrored production half of the trial (`E-002`, `E-011`).
+- The preflight oracle should use lower function-table rows exported through
+  `EGraph::function_for_each`; rendered `print-function` output is useful for
+  debugging but should not be the primary row-comparison surface (`E-022`,
+  `E-023`).
+- The first runnable slice is relation-only `i64` path/reachability: native
+  lower rows projected to logical input tuples compared against a small DD
+  reachability model (`E-024`).
 - The external model should stay small because current egglog crate boundaries,
   parser/typechecker/proof complications, and frontend transformations make an
   immediate invasive refactor a poor learning vehicle (`E-004`, `E-005`).
@@ -39,8 +46,9 @@ for design decisions (`E-001`, `E-002`, `E-003`).
 
 Use [`minimal-dd-trial.md`](minimal-dd-trial.md) as the current trail for the
 future plan. Use [`evidence-ledger.md`](evidence-ledger.md) to answer "why do we
-believe this?" without duplicating long option summaries. Use raw artifacts
-under `findings/artifacts/` for measured facts.
+believe this?" without duplicating long option summaries. Use
+`code/minimal-dd-trial/` for the runnable preflight and raw artifacts under
+`findings/artifacts/` for measured facts.
 
 The archived docs under
 [`archive/2026-04-prior-backend-plans/`](archive/2026-04-prior-backend-plans/)
