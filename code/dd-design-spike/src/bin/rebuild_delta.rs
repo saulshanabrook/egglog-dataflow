@@ -32,11 +32,21 @@ struct DisplacedId {
     new: Id,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+struct MergeCollision {
+    candidate: DepRow,
+    existing: DepRow,
+    survivor: Id,
+    displaced: Id,
+}
+
 #[derive(Debug, Serialize)]
 struct ScenarioSummary {
     constructor_rows: Vec<ConstructorRow>,
+    initial_live_rows: Vec<DepRow>,
     displaced_events: Vec<DisplacedId>,
     row_deltas: Vec<RowDelta>,
+    merge_collisions: Vec<MergeCollision>,
     final_live_rows: Vec<DepRow>,
     rewrite_count: u64,
     retraction_count: u64,
@@ -48,12 +58,14 @@ struct ScenarioSummary {
 #[derive(Debug)]
 struct RebuildModel {
     constructor_rows: BTreeSet<ConstructorRow>,
+    initial_live_rows: Vec<DepRow>,
     canonical: BTreeMap<Id, Id>,
     live_rows: BTreeSet<DepRow>,
     reverse_index: BTreeMap<Id, BTreeSet<DepRow>>,
     pending: VecDeque<DisplacedId>,
     displaced_events: Vec<DisplacedId>,
     row_deltas: Vec<RowDelta>,
+    merge_collisions: Vec<MergeCollision>,
     rewrites: u64,
     retractions: u64,
     insertions: u64,
@@ -66,14 +78,17 @@ impl RebuildModel {
         constructor_rows: impl IntoIterator<Item = ConstructorRow>,
         rows: impl IntoIterator<Item = DepRow>,
     ) -> Self {
+        let initial_live_rows = rows.into_iter().collect::<Vec<_>>();
         let mut model = Self {
             constructor_rows: BTreeSet::new(),
+            initial_live_rows: initial_live_rows.clone(),
             canonical: BTreeMap::new(),
             live_rows: BTreeSet::new(),
             reverse_index: BTreeMap::new(),
             pending: VecDeque::new(),
             displaced_events: Vec::new(),
             row_deltas: Vec::new(),
+            merge_collisions: Vec::new(),
             rewrites: 0,
             retractions: 0,
             insertions: 0,
@@ -84,7 +99,7 @@ impl RebuildModel {
             model.note_id(row.id);
             model.constructor_rows.insert(row);
         }
-        for row in rows {
+        for row in initial_live_rows {
             model.note_id(row.arg);
             model.note_id(row.result);
             model.insert_row(row);
@@ -198,7 +213,12 @@ impl RebuildModel {
                 self.merges += 1;
                 let survivor = collision.result.min(new_row.result);
                 let displaced = collision.result.max(new_row.result);
-                self.emit_delta(new_row, 1);
+                self.merge_collisions.push(MergeCollision {
+                    candidate: new_row,
+                    existing: collision,
+                    survivor,
+                    displaced,
+                });
                 self.union(displaced, survivor);
             } else if self.insert_row(new_row) {
                 self.emit_delta(new_row, 1);
@@ -219,8 +239,10 @@ impl RebuildModel {
     fn summary(&self) -> ScenarioSummary {
         ScenarioSummary {
             constructor_rows: self.constructor_rows.iter().copied().collect(),
+            initial_live_rows: self.initial_live_rows.clone(),
             displaced_events: self.displaced_events.clone(),
             row_deltas: self.row_deltas.clone(),
+            merge_collisions: self.merge_collisions.clone(),
             final_live_rows: self.final_live_rows(),
             rewrite_count: self.rewrites,
             retraction_count: self.retractions,
@@ -229,6 +251,22 @@ impl RebuildModel {
             fixed_point_iterations: self.fixed_point_iterations,
         }
     }
+}
+
+fn replay_row_deltas(initial_rows: &[DepRow], row_deltas: &[RowDelta]) -> Vec<DepRow> {
+    let mut rows = initial_rows.iter().copied().collect::<BTreeSet<_>>();
+    for delta in row_deltas {
+        match delta.diff {
+            -1 => {
+                assert!(rows.remove(&delta.row), "retraction must target a live row");
+            }
+            1 => {
+                assert!(rows.insert(delta.row), "insertion must add a new live row");
+            }
+            other => panic!("unexpected row delta diff: {other}"),
+        }
+    }
+    rows.into_iter().collect()
 }
 
 fn run_scenario() -> ScenarioSummary {
@@ -276,21 +314,29 @@ fn run_scenario() -> ScenarioSummary {
     );
     assert_eq!(
         summary.row_deltas,
-        vec![
-            RowDelta {
-                row: DepRow { arg: 2, result: 20 },
-                diff: -1,
-            },
-            RowDelta {
-                row: DepRow { arg: 1, result: 20 },
-                diff: 1,
-            },
-        ]
+        vec![RowDelta {
+            row: DepRow { arg: 2, result: 20 },
+            diff: -1,
+        }]
+    );
+    assert_eq!(
+        summary.merge_collisions,
+        vec![MergeCollision {
+            candidate: DepRow { arg: 1, result: 20 },
+            existing: DepRow { arg: 1, result: 10 },
+            survivor: 10,
+            displaced: 20,
+        }]
     );
     assert_eq!(summary.final_live_rows, vec![DepRow { arg: 1, result: 10 }]);
+    assert_eq!(
+        replay_row_deltas(&summary.initial_live_rows, &summary.row_deltas),
+        summary.final_live_rows,
+        "row deltas must replay from initial live rows to final live rows"
+    );
     assert_eq!(summary.rewrite_count, 1);
     assert_eq!(summary.retraction_count, 1);
-    assert_eq!(summary.insertion_count, 1);
+    assert_eq!(summary.insertion_count, 0);
     assert_eq!(summary.merge_count, 1);
     assert_eq!(summary.fixed_point_iterations, 2);
     assert!(model.pending.is_empty());
@@ -309,6 +355,10 @@ fn main() -> std::io::Result<()> {
         "constructor_rows".to_string(),
         json!(summary.constructor_rows),
     );
+    metrics.insert(
+        "initial_live_rows".to_string(),
+        json!(summary.initial_live_rows),
+    );
     metrics.insert("rewrites".to_string(), json!(summary.rewrite_count));
     metrics.insert("retractions".to_string(), json!(summary.retraction_count));
     metrics.insert("insertions".to_string(), json!(summary.insertion_count));
@@ -322,6 +372,17 @@ fn main() -> std::io::Result<()> {
         json!(summary.final_live_rows),
     );
     metrics.insert("row_deltas".to_string(), json!(summary.row_deltas));
+    metrics.insert(
+        "merge_collisions".to_string(),
+        json!(summary.merge_collisions),
+    );
+    metrics.insert(
+        "delta_replay_matches_final".to_string(),
+        json!(
+            replay_row_deltas(&summary.initial_live_rows, &summary.row_deltas)
+                == summary.final_live_rows
+        ),
+    );
     metrics.insert(
         "displaced_events".to_string(),
         json!(summary.displaced_events),
@@ -342,10 +403,11 @@ fn main() -> std::io::Result<()> {
         metrics,
         observations: vec![
             "A displaced-id event is enough to find affected dependent rows through a reverse index.".to_string(),
-            "The rewrite protocol emits an explicit -old_row/+new_row signed delta pair before resolving the collision.".to_string(),
-            "A key collision on the rewritten dependent row runs merge and queues the resulting displaced-id event for the same fixed-point loop.".to_string(),
+            "The rewrite protocol emits only signed deltas for rows that are actually committed to live state.".to_string(),
+            "A key collision on the rewritten dependent row is recorded as merge evidence and queues the resulting displaced-id event without emitting a non-live insertion.".to_string(),
+            "Replaying row_deltas from initial_live_rows produces final_live_rows.".to_string(),
         ],
-        decision: "Canonical-map rebuild can be modeled as a delta protocol: displaced ids drive reverse-index row rewrites, and rewritten dependent-row collisions become further id merges.".to_string(),
+        decision: "Canonical-map rebuild can be modeled as a reverse-index collision protocol; the signed row-delta stream is replayable for committed live-row changes, while collision candidates are tracked separately until the protocol is mapped onto maintained DD traces.".to_string(),
         limitations: vec![
             "This is an in-memory deterministic model, not a Differential Dataflow implementation.".to_string(),
             "The scenario covers one dependent-table collision shape and does not exercise multi-column keys or multiplicities greater than one.".to_string(),

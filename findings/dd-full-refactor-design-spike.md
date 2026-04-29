@@ -20,6 +20,12 @@ existing egglog frontend and `CoreRule` IR:
 This changes the earlier bridge-preserving plan: the bridge API is now treated
 as migration scaffolding, not as a design constraint.
 
+This document is not a broad rewrite authorization. The implementation path is
+two-step: first build a DD runtime scaffold that proves real `ResolvedCoreRule`
+lowering can drive a DD-owned runtime, then run a separate Option 3
+replacement-backend ownership gate before claiming the design is ready to replace
+native execution for a meaningful semantic slice.
+
 ## Evidence Gathered In This Spike
 
 ### Repo boundary evidence
@@ -78,13 +84,14 @@ c_trace_contents={Row { value: 201, row_ts: 4 }: 1}
 installed_after_drop=[]
 ```
 
-This was enough to choose compiled DD fragments for the first design. The
+This was enough to keep compiled DD fragments as the first scaffold design. The
 follow-up lifecycle churn and production-shaped lifecycle experiments below
-strengthen that choice: churn covers bounded install/drop behavior, and the
-production-shaped run imports persistent traces, feeds recursive results back at
-barriers, and consolidates signed output diffs before host-side action
-visibility. Remaining lifecycle validation should attach this machinery to
-`ResolvedCoreRule` lowering and realistic rule bodies.
+strengthen that choice for bounded generated fragments: churn covers
+install/drop behavior, and the production-shaped run imports persistent traces,
+feeds recursive results back at barriers, and consolidates signed output diffs
+before host-side action visibility. They do not prove arbitrary Timely/DD
+control-plane viability for real egglog schedules; that remains part of the
+Option 3 ownership gate.
 
 ## Selected Architecture
 
@@ -103,6 +110,13 @@ Do not start with a separate `egglog-dd` crate. `CoreRule`, `TypeInfo`, sort
 registration, command orchestration, extraction hooks, and proof hooks are still
 inside the `egglog` crate. Creating a separate crate first would require
 publicizing or moving the IR before the execution design is proven.
+
+The Rust API may intentionally shift during this work. The scaffold PR must
+inventory and name the replacement concepts for existing extension surfaces that
+currently expose `core-relations` or `egglog-bridge`: `ExecutionState`,
+`TableAction`, `UnionAction`, `FunctionRow`, `Sort::column_ty`, primitives, and
+Rust rules. Compatibility is not required for the scaffold, but breakage must be
+explicit rather than accidental.
 
 End state:
 
@@ -158,29 +172,32 @@ compaction, not as the only encoding of egglog seminaive freshness.
 | Area | First classification | Required design |
 | --- | --- | --- |
 | Facts and relation queries | MVP | Insert facts into DD-owned relation sessions; read visible state only after probe gates. |
-| Function tables | MVP | Store rows as keyed rows with optional output and subsume state. |
+| Function tables | MVP | Store rows as keyed rows with optional output and subsume state. Preserve `DefaultVal::Fail` lookup semantics separately from constructor/default insertion: missing custom-function lookups must take the current panic/failure path, not become optional absence or fresh insertion. |
 | Constructor fresh ids | MVP | Host-side action application owns fresh-id allocation and feeds committed rows back into DD. |
 | Primitive query filters | MVP | Support pure/read-only primitive filters in compiled fragments. |
 | Primitive actions | MVP narrow | Execute host-side at action application boundaries; fail/panic semantics must match current behavior. |
 | Per-rule seminaive freshness | MVP | Store `row_ts` and `last_run`; filter candidate rows by freshness in compiled fragments. |
 | Simple merges | MVP narrow | Implement `Old`, `New`, `AssertEq`, and `UnionId` first. |
 | Union/canonicalization | MVP vertical slice | Specialized canonical map emits displaced ids, then DD receives row rewrite/retraction deltas. |
-| Rebuild | MVP vertical slice | Rebuild to fixed point for the selected table universe; emit `-old_row +new_row` with fresh `row_ts`. |
-| Delete | MVP semantic slice | Negative diff current live row by key; no-op if missing. This does not need to block Gate 1, but it should be present before claiming backend semantics. |
-| Subsume | MVP semantic slice | Remove from active view but retain all-row/provenance visibility. |
+| Rebuild | MVP vertical slice | Rebuild to fixed point for the selected table universe; committed row deltas must replay from initial live rows to final live rows. Collision candidates that only drive merges must not appear as live-row insertions unless they are actually committed. |
+| Delete | Action ABI MVP; semantic slice later | `Change::Delete` must be represented in the first backend action boundary so later mutation work does not reopen the ABI. Full negative-diff live-row semantics can land with the mutation slice. |
+| Subsume | Action ABI MVP; semantic slice later | `Change::Subsume` must be represented in the first backend action boundary. Full active/all-row/provenance view semantics can land with the mutation slice. |
 | Containers | Post-MVP parity | Same-id semantic changes require dirty-refresh events: `-row@old_ts +same_row@next_ts`; the toy contract now passes, but broad container parity remains later. |
-| Scheduler worklists | Interface MVP, parity later | Materialize matches, ask scheduler, write chosen matches, then fire actions behind a barrier; define the backend interface before the first DD backend PR. |
+| Scheduler worklists | Interface MVP, parity later | Materialize matches, ask scheduler, write chosen matches, then fire actions behind a barrier; define the backend interface before the scaffold PR. |
 | Reports | MVP minimal | Return changed/match/rebuild counts for touched rules; expand after counters stabilize. |
 | Serialization | MVP smoke for full file harness | The file-test harness appends `(print-size)` and then exercises graph/serialization paths, so table readback must have a smoke implementation before `tests/files.rs` is used as a gate. Full stable/subsumed parity can follow. |
 | Extraction | MVP basic only if extraction tests are in gate | Basic constructor extraction can follow canonical readback; subsume/container/proof extraction should wait until those views are stable. |
-| Proofs/proof encoding | Known fail in first PR | Later planner work; DD does not automatically solve proof-query optimization. |
+| Proof-aware planning | Ownership-gate follow-up | DD does not automatically solve proof-query optimization. Preserve the April 24 planner benchmark: compare naive seminaive delta expansion with dependent lookup on A/B/C-style functional-dependency cases. This is planner work, not only proof extraction/proof API porting. |
+| Proof extraction/proof encoding | Known fail in scaffold | Proof term encoding remains a partial specification/oracle, not a production shortcut. Full proof extraction and proof API parity are later work. |
 | Push/pop | Separate spike | DD needs snapshot/rollback or epoch-scoped branch state; current `EGraph::push` clones the whole graph. |
 
 ## Test Ladder
 
 ### Gate 1: basic DD execution
 
-- `repos/egglog/tests/web-demo/path.egg`
+- add a reduced no-print path fixture derived from
+  `repos/egglog/tests/web-demo/path.egg`, or keep the path case out of Gate 1
+  until `print-function` readback is implemented;
 - `repos/egglog/tests/relation-query-allowed.egg`
 - `repos/egglog/tests/bool.egg`
 - `repos/egglog/tests/i64.egg`
@@ -208,18 +225,24 @@ compaction, not as the only encoding of egglog seminaive freshness.
 - `repos/egglog/tests/merge-saturates.egg`
 - `repos/egglog/tests/repro-equal-constant.egg`
 - `repos/egglog/tests/repro-equal-constant2.egg`
-- `repos/egglog/tests/interval.egg`
 - `repos/egglog/tests/delete.egg`
 - `repos/egglog/tests/repro-new-backend-delete.egg`
 - `repos/egglog/tests/merge-during-rebuild.egg`
 
-### Gate 5: full harness smoke
+### Gate 5: readback and extraction smoke
+
+Use this gate only after explicit readback/extraction support exists:
+
+- `repos/egglog/tests/web-demo/path.egg`, because it runs `print-function`;
+- `repos/egglog/tests/interval.egg`, because it runs `extract`.
+
+### Gate 6: full harness smoke
 
 Only use `tests/files.rs` after `print-size`, graph export, and serialization
 smoke paths exist. The harness appends `(print-size)` to each file and then runs
 additional output checks, so it is not an execution-only gate.
 
-### Expected first-PR failures
+### Expected scaffold failures
 
 - full `tests/files.rs`;
 - extraction/proof tests;
@@ -227,8 +250,11 @@ additional output checks, so it is not an execution-only gate.
 - complex merge functions that read other functions;
 - arbitrary schedulers/backoff;
 - full container tests, especially same-id dirty refresh;
-- push/pop and APIs that expose `ExecutionState`, `TableAction`, or
-  `UnionAction`.
+- push/pop;
+- legacy Rust extension APIs. The scaffold may break APIs that expose
+  `ExecutionState`, `TableAction`, `UnionAction`, `FunctionRow`,
+  `Sort::column_ty`, primitives, and Rust rules, but it must document the
+  intended replacement surfaces.
 
 ## Follow-Up Experiment Results
 
@@ -238,32 +264,34 @@ They are bounded design-spike prototypes, not production backend code.
 
 | Experiment | Artifact | Result | Design decision |
 | --- | --- | --- | --- |
-| DD lifecycle churn stress | `findings/artifacts/dd-full-refactor/01-lifecycle-churn.json` | Pass: 1- and 4-worker runs over 10, 100, and 1000 fragments all completed with correct outputs, probe completion, compaction/frontier samples, RSS metrics, and no retained installed dataflows. | Keep compiled per-rule/per-ruleset fragments as the selected first design; use the production-shaped lifecycle run below to close the imported-trace and recursive-feedback control-plane risk. |
-| Production-shaped lifecycle run | `findings/artifacts/dd-full-refactor/06-production-lifecycle.json` | Pass: persistent edge/path/blocked arrangements were imported by generated fragments over 1- and 4-worker runs at 10, 100, and 1000 fragments; recursive host feedback committed the expected path rows with zero early-visibility violations, one blocked candidate per config, and no retained fragment or base dataflows. | Treat compiled fragments over shared arrangements as viable for the first runtime shell. Output sinks must consolidate signed DD diffs before firing actions; the remaining lifecycle risk is CoreRule lowering and realistic rule diversity, not Timely/DD control-plane viability. |
-| Rebuild delta toy | `findings/artifacts/dd-full-refactor/02-rebuild-delta.json` | Pass: one displaced-id event rewrote a dependent row with `-old_row +new_row`; the key collision ran merge and queued a second displaced-id event; fixed point completed in two iterations. | Use specialized canonical-map displaced-id events plus reverse-index row rewrites as the equality/rebuild delta protocol. |
+| DD lifecycle churn stress | `findings/artifacts/dd-full-refactor/01-lifecycle-churn.json` | Pass: 1- and 4-worker runs over 10, 100, and 1000 fragments completed with correct outputs, probe completion, compaction/frontier samples, RSS samples, and no retained installed dataflows. | Keep compiled per-rule/per-ruleset fragments as the selected scaffold design, but treat RSS as a smoke signal rather than proof of no retention. |
+| Production-shaped lifecycle run | `findings/artifacts/dd-full-refactor/06-production-lifecycle.json` | Pass: persistent edge/path/blocked arrangements were imported by generated fragments over 1- and 4-worker runs at 10, 100, and 1000 fragments; recursive host feedback committed the expected path rows with zero early-visibility violations, one blocked candidate per config, and no retained fragment or base dataflows. | Treat compiled fragments over shared arrangements as viable for the runtime scaffold on this bounded chain/blocked workload. Output sinks must consolidate signed DD diffs before firing actions. Broader control-plane viability remains open for real `ResolvedCoreRule` diversity and arbitrary schedules. |
+| Rebuild delta toy | `findings/artifacts/dd-full-refactor/02-rebuild-delta.json` | Pass: a displaced-id event found an affected dependent row; the committed row-delta stream now replays from `initial_live_rows` to `final_live_rows`; the key collision is recorded separately as merge evidence and queues a second displaced-id event. | Treat this as a reverse-index collision toy and a replayable live-row-delta contract, not yet as the equality/rebuild DD-trace protocol. The next proof point must map it onto maintained DD traces. |
 | Delete/subsume signed-diff toy | `findings/artifacts/dd-full-refactor/03-delete-subsume.json` | Pass: hard delete removed the live/active row and was idempotent on repeat; subsume removed only from active view while retaining live/all-row/provenance visibility. | Include delete and subsume view semantics in the first semantic mutation slice instead of treating them as speculative. |
 | Same-id container dirty refresh toy | `findings/artifacts/dd-full-refactor/04-container-dirty-refresh.json` | Pass: a stable container id with changed canonical contents emitted `-parent@old_ts +same-logical-parent@next_ts`, and the refreshed row passed the next seminaive freshness filter. | Container parity still belongs after the first backend slice, but the required dirty-refresh contract is now explicit and testable. |
-| Scheduler materialization toy | `findings/artifacts/dd-full-refactor/05-scheduler-materialization.json` | Pass: complete matches stayed separate from scheduler admission; selected matches wrote to a worklist; actions fired only after barriers; skipped matches remained residual. | Design scheduler admission/worklist/barrier interfaces before the first DD backend PR, even if full scheduler parity lands later. |
+| Scheduler materialization toy | `findings/artifacts/dd-full-refactor/05-scheduler-materialization.json` | Pass: complete matches stayed separate from scheduler admission; selected matches wrote to a worklist; actions fired only after barriers; skipped matches remained residual. | Design scheduler admission/worklist/barrier interfaces before the scaffold PR, even if full scheduler parity lands later. |
 
 ### Remaining Unknowns
 
 - Lifecycle is validated for synthetic compiled fragments, bounded churn,
   imported shared arrangements, recursive host feedback, and signed-diff output
-  materialization; still validate real `ResolvedCoreRule` lowering and broader
-  rule shapes once the DD runtime shell exists.
-- Rebuild must still be mapped onto maintained DD traces rather than the
-  in-memory reverse-index model.
+  materialization on one narrow workload; still validate real `ResolvedCoreRule`
+  lowering, broader rule shapes, and arbitrary schedules.
+- Rebuild has a replayable in-memory reverse-index collision model, but it still
+  must be mapped onto maintained DD traces before becoming the equality/rebuild
+  protocol.
 - Delete/subsume/container/scheduler prototypes prove control semantics, not
   throughput or concurrency behavior.
-- Push/pop, extraction/proofs, broad Rust API compatibility, and stable
-  serialization parity still need separate design work.
+- Push/pop, extraction/proofs, Rust API migration, and stable serialization
+  parity still need separate design work.
 
-## Ready-To-Begin Implementation Handoff
+## DD Runtime Scaffold Handoff
 
-Status: ready to begin the first implementation sequence. This does not mean
-semantic parity or a performance win is proven. It means the remaining risk is
-now implementation risk: attach the DD runtime shape to real `ResolvedCoreRule`
-lowering, then expand semantic coverage behind explicit gates.
+Status: ready to begin a scaffold sequence, not a production replacement. This
+does not mean semantic parity, a performance win, or the Option 3
+replacement-backend gate is proven. The scaffold should attach the DD runtime
+shape to real `ResolvedCoreRule` lowering and expose the missing design risks
+behind explicit gates.
 
 The next agent should start in `repos/egglog`, using this document and the
 prototype artifacts as evidence. Production `repos/egglog` code should move
@@ -271,9 +299,9 @@ toward one active backend: DD. Native egglog can remain temporarily as a test
 oracle, local baseline, or migration reference, but the implementation branch
 should not introduce a long-lived user-facing "native versus DD" backend split.
 
-### First implementation target
+### First implementation target: DD runtime scaffold
 
-Build a narrow DD backend vertical slice, not a full parity rewrite:
+Build a narrow DD runtime scaffold, not the Option 3 ownership gate:
 
 - Add an internal backend boundary under `repos/egglog/src/backend/`.
 - Add `repos/egglog/src/backend/dd/` for a long-lived Timely/DD runtime.
@@ -282,13 +310,16 @@ Build a narrow DD backend vertical slice, not a full parity rewrite:
 - Compile a small subset of `ResolvedCoreRule` into DD fragments over shared
   relation arrangements.
 - Support facts, relation joins, repeated variables, pure primitive query
-  filters, constructor/default insert, host-side action application, and
-  per-rule seminaive freshness.
-- Materialize DD outputs by net signed diff before actions fire. The
-  production-shaped lifecycle test showed that logging only positive diffs is
-  wrong for antijoin-style outputs.
+  filters, constructor/default insert, `DefaultVal::Fail` missing-lookup
+  behavior, host-side action application, and per-rule seminaive freshness.
+- Include `Delete` and `Subsume` in the action ABI from the start, even if their
+  full live/active/all-row semantics land in the mutation slice.
+- Materialize DD outputs by net signed diff before actions fire.
 - Track known failures explicitly. It is acceptable for many tests to fail in
-  the first branch if the failures match the expected-failure list below.
+  the scaffold branch if the failures match the expected-failure list below.
+- Inventory intentional Rust API breaks and replacement concepts for
+  `ExecutionState`, `TableAction`, `UnionAction`, `FunctionRow`,
+  `Sort::column_ty`, primitives, and Rust rules.
 
 ### Starting work plan
 
@@ -327,30 +358,32 @@ Build a narrow DD backend vertical slice, not a full parity rewrite:
    - Apply host-side actions only after output netting and probe completion.
 
 5. **Run the first correctness gate**
-   - Start with the Gate 1 files in this document.
+   - Start with the Gate 1 files in this document, excluding tests with hidden
+     `print-function`, extraction, serialization, proof, or push/pop
+     requirements.
    - Add focused runtime tests before trying the whole `tests/files.rs` harness.
    - Use native egglog only as an oracle when it helps explain a mismatch.
-   - Record expected failures instead of expanding the first PR to all parity
+   - Record expected failures instead of expanding the scaffold to all parity
      areas.
 
-### First PR acceptance criteria
+### Scaffold PR acceptance criteria
 
-The first serious implementation PR is successful if it:
+The DD runtime scaffold PR is successful if it:
 
-- replaces the active production execution path for its supported subset with
-  DD-owned execution;
 - runs a small relation/fact/join/action subset from real egglog input through
   `ResolvedCoreRule`, not only through toy prototype code;
 - has a long-lived DD runtime with probes, output netting, and relation
   readback;
 - includes metrics for fragment build latency, probe/barrier count, row
   inserts, output diffs, compaction frontier, and RSS or trace-memory proxy;
+- defines the action ABI for delete/subsume and the migration surface for the
+  legacy Rust API types, even if those APIs break;
 - documents known failing tests and why they are out of scope;
 - avoids committing to a permanent bridge/native mirrored runtime.
 
-### First PR non-goals
+### Scaffold PR non-goals
 
-Do not block the first implementation branch on:
+Do not block the scaffold branch on:
 
 - full equality/rebuild parity beyond the smallest vertical slice;
 - containers;
@@ -358,14 +391,27 @@ Do not block the first implementation branch on:
 - extraction and proofs;
 - stable/full serialization;
 - push/pop;
-- public Rust API compatibility for `ExecutionState`, `TableAction`, and
-  `UnionAction`;
+- preserving legacy Rust API compatibility;
 - proving a performance win.
 
-The next useful milestone after the first PR is not another toy lifecycle
-experiment. It is a real-rule mismatch log: which Gate 1 or Gate 2 tests fail,
-what semantic mechanism is missing, and whether the missing mechanism belongs
-in the equality/rebuild PR, mutation/scheduler PR, or a separate spike.
+### Immediate next milestone: Option 3 ownership gate
+
+The next milestone after the scaffold is the Option 3 replacement-backend gate,
+not another toy lifecycle experiment. It must use a small relation/function-table
+universe and prove:
+
+- DD-owned state for the selected universe, with native egglog used only as an
+  oracle;
+- per-rule freshness and step-visible state diffs against native egglog;
+- one rebuild/canonicalization event over maintained DD traces;
+- one same-id dirty-refresh-style invalidation or equivalent;
+- one scheduler materialization boundary;
+- counters for row rewrites, retractions/reinsertions, refresh rows, scheduler
+  admissions/skips, frontier lag, trace memory, and compaction.
+
+The gate should also include, either in the same slice or immediate follow-up,
+the proof-aware planner benchmark: compare naive seminaive delta expansion with
+a dependent lookup plan on A/B/C-shaped functional-dependency cases.
 
 ## Implementation PR Sequence
 
@@ -373,6 +419,8 @@ in the equality/rebuild PR, mutation/scheduler PR, or a separate spike.
    - Introduce `src/backend/` and backend-neutral context traits.
    - Keep native/oracle support only for tests or local comparison.
    - No production two-backend switch is required for the final branch.
+   - Inventory intentional Rust API breaks and replacement backend-facing
+     concepts for extension APIs.
 
 2. **DD lifecycle/runtime PR**
    - Add DD runtime shell, relation registry, task streams, probes, output sinks,
@@ -384,8 +432,9 @@ in the equality/rebuild PR, mutation/scheduler PR, or a separate spike.
 3. **Core execution vertical slice PR**
    - Compile a subset of `ResolvedCoreRule` into DD fragments.
    - Support facts, relation joins, repeated variables, pure primitive filters,
-     constructor lookup/default insert, host-side action application, and
-     per-rule freshness.
+     constructor lookup/default insert, `DefaultVal::Fail`, host-side action
+     application, and per-rule freshness.
+   - Include `Delete` and `Subsume` in the backend action ABI.
    - Include scheduler-facing match output, worklist, and barrier interfaces,
      but only implement the default all-matches admission path at first.
 
@@ -394,16 +443,24 @@ in the equality/rebuild PR, mutation/scheduler PR, or a separate spike.
      feedback, simple merge support, and fixed-point rebuild for the selected
      universe.
 
-5. **Mutation and scheduler PR**
-   - Add negative-diff delete, active/all-row subsume views, and selected-match
-     scheduler admission over the already-defined worklist/barrier interface.
+5. **Option 3 ownership-gate PR**
+   - Prove the selected universe has single ownership: per-rule freshness,
+     rebuild/canonicalization on maintained DD traces, dirty-refresh-style
+     invalidation, scheduler materialization, and native-oracle state diffs.
+   - Include the proof-aware planner benchmark or record it as the immediate
+     follow-up for the gate.
 
-6. **Container/API parity PRs**
+6. **Mutation and scheduler parity PR**
+   - Fill in negative-diff delete, active/all-row subsume views, and
+     selected-match scheduler admission over the already-defined
+     worklist/barrier interface.
+
+7. **Container/API parity PRs**
    - Port container dirty refresh, extraction, serialization, proof hooks,
-     push/pop, Rust primitive APIs, Rust rules, and public compatibility
+     push/pop, Rust primitive APIs, Rust rules, and replacement public API
      surfaces.
 
-7. **Cleanup PR**
+8. **Cleanup PR**
    - Remove production dependency on `egglog-bridge`.
    - Remove or archive `core-relations` once all reused pieces have been moved or
      replaced.
@@ -424,19 +481,23 @@ in the equality/rebuild PR, mutation/scheduler PR, or a separate spike.
 ## Stop Criteria Answered
 
 - Dynamic per-rule DD graph construction is viable for bounded generated
-  fragments and for a production-shaped imported-arrangement/recursive-feedback
-  run. Output sinks must materialize net signed diffs before actions; the
-  remaining lifecycle work is `ResolvedCoreRule` lowering and realistic rule
-  shapes.
+  fragments and for one production-shaped imported-arrangement/recursive-feedback
+  run. Output sinks must materialize net signed diffs before actions; broader
+  control-plane viability still requires real `ResolvedCoreRule` lowering,
+  realistic rule shapes, and arbitrary schedules.
 - The old bridge/core-relations layers should not survive as permanent
   architecture boundaries.
-- The first serious implementation must support facts, function rows,
-  constructor defaults, primitive filters/actions, per-rule freshness, simple
-  merges, and a vertical slice of canonicalization/rebuild.
-- The first implementation branch may knowingly fail extraction, proofs,
-  stable/full serialization parity, broad containers, arbitrary schedulers,
-  push/pop, and complex Rust API compatibility.
+- The first scaffold must support facts, function rows, constructor defaults,
+  `DefaultVal::Fail`, primitive filters/actions, per-rule freshness, output
+  netting, delete/subsume action ABI shape, and Rust API migration inventory.
+- The separate Option 3 ownership gate must own per-rule freshness, one
+  rebuild/canonicalization event over maintained DD traces, one
+  dirty-refresh-style invalidation, one scheduler materialization boundary, and
+  native-oracle comparison.
+- The first scaffold may knowingly fail extraction, proofs, stable/full
+  serialization parity, broad containers, arbitrary schedulers, push/pop, and
+  legacy Rust API compatibility.
 - Follow-up prototypes now pass for lifecycle churn, production-shaped
-  lifecycle, rebuild deltas, delete/subsume, container dirty refresh, and
-  scheduler materialization. Further work should turn these contracts into
+  lifecycle, replayable rebuild deltas, delete/subsume, container dirty refresh,
+  and scheduler materialization. Further work should turn these contracts into
   production-shaped backend tests rather than repeat the same toy spikes.

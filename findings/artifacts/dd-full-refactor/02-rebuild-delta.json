@@ -28,6 +28,7 @@
         "symbol": "y"
       }
     ],
+    "delta_replay_matches_final": true,
     "displaced_events": [
       {
         "new": 1,
@@ -45,7 +46,31 @@
       }
     ],
     "fixed_point_iterations": 2,
-    "insertions": 1,
+    "initial_live_rows": [
+      {
+        "arg": 1,
+        "result": 10
+      },
+      {
+        "arg": 2,
+        "result": 20
+      }
+    ],
+    "insertions": 0,
+    "merge_collisions": [
+      {
+        "candidate": {
+          "arg": 1,
+          "result": 20
+        },
+        "displaced": 20,
+        "existing": {
+          "arg": 1,
+          "result": 10
+        },
+        "survivor": 10
+      }
+    ],
     "merges": 1,
     "retractions": 1,
     "rewrites": 1,
@@ -56,23 +81,17 @@
           "arg": 2,
           "result": 20
         }
-      },
-      {
-        "diff": 1,
-        "row": {
-          "arg": 1,
-          "result": 20
-        }
       }
     ],
-    "rss_kb": 1888
+    "rss_kb": 1904
   },
   "observations": [
     "A displaced-id event is enough to find affected dependent rows through a reverse index.",
-    "The rewrite protocol emits an explicit -old_row/+new_row signed delta pair before resolving the collision.",
-    "A key collision on the rewritten dependent row runs merge and queues the resulting displaced-id event for the same fixed-point loop."
+    "The rewrite protocol emits only signed deltas for rows that are actually committed to live state.",
+    "A key collision on the rewritten dependent row is recorded as merge evidence and queues the resulting displaced-id event without emitting a non-live insertion.",
+    "Replaying row_deltas from initial_live_rows produces final_live_rows."
   ],
-  "decision": "Canonical-map rebuild can be modeled as a delta protocol: displaced ids drive reverse-index row rewrites, and rewritten dependent-row collisions become further id merges.",
+  "decision": "Canonical-map rebuild can be modeled as a reverse-index collision protocol; the signed row-delta stream is replayable for committed live-row changes, while collision candidates are tracked separately until the protocol is mapped onto maintained DD traces.",
   "limitations": [
     "This is an in-memory deterministic model, not a Differential Dataflow implementation.",
     "The scenario covers one dependent-table collision shape and does not exercise multi-column keys or multiplicities greater than one."
