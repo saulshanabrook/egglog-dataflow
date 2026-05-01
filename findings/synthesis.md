@@ -23,9 +23,14 @@ for design decisions (`E-001`, `E-002`, `E-003`).
   `EGraph::function_for_each`; rendered `print-function` output is useful for
   debugging but should not be the primary row-comparison surface (`E-022`,
   `E-023`).
-- The first runnable slice is relation-only `i64` path/reachability: native
-  lower rows projected to logical input tuples compared against a small DD
-  reachability model (`E-024`).
+- The first runnable acceptance gate is relation-only over `i64`: native lower
+  rows projected to logical tuples are compared against DD results for
+  recursive path reachability, repeated-variable filtering, and a non-recursive
+  three-way join (`E-024`, `E-025`).
+- Materialize's production DD/Timely blog evidence sharpens how that gate
+  should be interpreted: it is a semantic canary, not a performance benchmark,
+  until memory/compaction, arrangement-aware join plans, and runtime/progress
+  mechanisms are measured explicitly (`E-026`, `E-027`, `E-028`, `E-029`).
 - The external model should stay small because current egglog crate boundaries,
   parser/typechecker/proof complications, and frontend transformations make an
   immediate invasive refactor a poor learning vehicle (`E-004`, `E-005`).
@@ -41,14 +46,19 @@ for design decisions (`E-001`, `E-002`, `E-003`).
 - WCOJ, `dataflow-join`, SRDatalog, and DBSP remain relevant substrate and
   planning references, but they are design inputs rather than proof that the
   egglog backend problem is solved (`E-019`, `E-020`).
+- The Materialize blog corpus is useful production-system evidence for
+  DD/Timely behavior, but it does not settle egglog-specific equality,
+  rebuild, container, scheduler, or primitive semantics (`E-026`).
 
 ## Evidence Shape
 
 Use [`minimal-dd-trial.md`](minimal-dd-trial.md) as the current trail for the
 future plan. Use [`evidence-ledger.md`](evidence-ledger.md) to answer "why do we
 believe this?" without duplicating long option summaries. Use
-`code/minimal-dd-trial/` for the runnable preflight and raw artifacts under
-`findings/artifacts/` for measured facts.
+`code/minimal-dd-trial/` for the runnable preflight, raw artifacts under
+`findings/artifacts/` for measured facts, and
+`sources/materialize-blog/` for the Materialize blog snapshot plus relevance
+index.
 
 The archived docs under
 [`archive/2026-04-prior-backend-plans/`](archive/2026-04-prior-backend-plans/)

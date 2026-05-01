@@ -1,0 +1,8 @@
+{
+    "rust-analyzer.linkedProjects": [
+        "${workspaceFolder}/code/minimal-dd-trial/Cargo.toml",
+    ],
+    "cSpell.words": [
+        "fixpoint"
+    ]
+}

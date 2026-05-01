@@ -68,7 +68,10 @@ benchmarks map into DD (`E-001`, `E-002`, `E-003`).
   callback reads must be visible as matched inputs, declared dependencies, or
   oracle-only behavior (`E-018`)?
 - **Join strategy:** Which workloads are fair DD join/WCOJ trials, and which
-  are mainly equality, rebuild, container, or scheduler stressors (`E-019`)?
+  are mainly equality, rebuild, container, or scheduler stressors? Materialize's
+  join-maintenance evidence also says performance trials need explicit
+  relation/key arrangements and join-plan shape before timing results are
+  interpreted (`E-019`, `E-028`).
 - **Alternative substrate lens:** Whether DBSP's automatic differentiation
   model explains any part of the mapping better than manual DD lowering remains
   a reading question, not an implementation choice (`E-020`).
@@ -89,11 +92,12 @@ gate:
   tuples and retain raw lower-row values, output value, sort names, and
   `subsumed` as debug evidence. Synthetic constructor/e-class output ids are
   not the logical relation identity (`E-022`, `E-024`).
-- **Initial subset:** Start with `i64` relation facts, relation atoms,
-  repeated-variable filters, joins, and explicit staged `(run ...)` boundaries.
+- **Initial subset:** The first working gate covers `i64` relation facts,
+  relation atoms, repeated-variable filters, recursive path reachability,
+  non-recursive multi-joins, and explicit staged `(run ...)` oracle boundaries.
   Scope out merge/equality, rebuild, containers, custom schedulers, host
-  callbacks, extraction, and proof encoding until the row oracle and relation
-  DD model are working (`E-018`, `E-021`, `E-024`).
+  callbacks, extraction, and proof encoding until later probes (`E-018`,
+  `E-021`, `E-024`, `E-025`).
 - **Program boundary:** Pair a native `.egg` fixture with a small external trial
   scenario spec. Do not block the first slice on direct `ResolvedCoreRule`
   export; use the existing canary evidence to keep the later rule-boundary
@@ -102,6 +106,11 @@ gate:
   final visible rows. Per-rule freshness internals remain a follow-up schedule
   witness once the relation slice can already compare against native rows
   (`E-009`, `E-010`, `E-024`).
+- **Performance interpretation:** Treat the current generic relation evaluator
+  as a correctness canary only. Materialize production evidence makes memory,
+  compaction/frontier progress, arrangement reuse, join-plan shape, and
+  runtime/progress mechanics required measurement axes before performance
+  claims (`E-026`, `E-027`, `E-028`, `E-029`).
 
 These questions should be explored after the first row-oracle comparison is
 running:
@@ -133,6 +142,9 @@ the first performance comparison:
 - equality/rebuild and replayable row-delta witnesses (`E-014`, `E-015`);
 - container dirty-refresh and higher-order container witnesses (`E-016`);
 - scheduler materialization/admission witnesses (`E-017`).
+- memory/compaction/frontier instrumentation, arrangement-aware join planning,
+  and mechanism-level attribution for recursive speedups or slowdowns (`E-027`,
+  `E-028`, `E-029`).
 
 ## Oracle Requirements
 
@@ -155,17 +167,20 @@ the first performance comparison:
 
 The mapping preflight resolves these v0 inputs:
 
-- first subset: relation-only `i64` reachability;
+- first subset: relation-only `i64` reachability, repeated-variable filtering,
+  and non-recursive three-way joins;
 - external artifact shape: `code/minimal-dd-trial/`;
 - oracle interface: lower rows exported with `function_for_each`;
-- first comparison family: path/reachability;
+- first comparison family: path/reachability plus targeted relation-shape
+  witnesses;
 - first comparison identity: sorted logical input tuples plus raw lower-row
-  debug evidence (`E-022`, `E-024`).
+  debug evidence (`E-022`, `E-024`, `E-025`).
 
 A future MVP plan still needs to choose:
 
 - the measurement schema for runtime, build/setup cost, rows, diffs, frontiers,
-  trace/compaction, and oracle mismatches;
+  trace/compaction, arrangement reuse, join-plan shape, memory/state growth,
+  mechanism attribution, and oracle mismatches (`E-027`, `E-028`, `E-029`);
 - the rule shape expansion beyond relation reachability: top-down patterns,
   arbitrary joins, multi-patterns, schedules, containers, or hard joins;
 - whether later rule extraction should consume generated `.egg`, parsed

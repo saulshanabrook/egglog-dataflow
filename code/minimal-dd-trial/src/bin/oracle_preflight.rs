@@ -1,11 +1,11 @@
 use std::env;
 use std::path::PathBuf;
 
-use minimal_dd_trial::{run_path_trial, write_report, TrialResult};
+use minimal_dd_trial::{run_acceptance_trial, write_report, TrialResult};
 
 fn main() -> TrialResult<()> {
     let out = out_path_arg();
-    let report = run_path_trial()?;
+    let report = run_acceptance_trial()?;
 
     if let Some(path) = out {
         write_report(path, &report)?;
@@ -13,10 +13,10 @@ fn main() -> TrialResult<()> {
         println!("{}", serde_json::to_string_pretty(&report)?);
     }
 
-    if report.matches_oracle {
+    if report.all_match_oracle {
         Ok(())
     } else {
-        Err("DD reachability rows did not match lower-row egglog oracle".into())
+        Err("one or more DD scenario rows did not match lower-row egglog oracle".into())
     }
 }
 

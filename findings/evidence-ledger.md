@@ -281,3 +281,94 @@ and relevance to the current external DD trial.
   schedulers, primitives, extraction, and proofs as follow-up probes.
 - **Confidence:** Medium / High.
 - **Relevance:** Converts the mapping preflight into a runnable first gate.
+
+## E-025 - First Relation-Subset Acceptance Gate Passes
+
+- **Source fact:** `code/minimal-dd-trial` now runs three paired native/DD
+  scenarios: recursive path reachability, repeated-variable filtering, and a
+  non-recursive three-way join. The aggregate preflight artifact records
+  `all_match_oracle: true` after comparing DD logical rows against native
+  lower-row oracle snapshots.
+- **Source path:** `code/minimal-dd-trial/`,
+  `findings/artifacts/minimal-dd-trial/oracle-preflight.json`
+- **Derived conclusion:** The first relation-only acceptance gate covers facts,
+  recursive joins, repeated variables, multi-atom joins, lower-row oracle
+  comparison, and signed-diff netting before host-side row comparison.
+- **Confidence:** Medium / High.
+- **Relevance:** Establishes the first coding gate for iterating beyond the
+  preflight.
+
+## E-026 - Materialize Blog Adds Production DD Runtime Evidence
+
+- **Source fact:** The Materialize blog corpus snapshot contains 166 indexed
+  posts. The relevance pass classified 32 as high relevance and 36 as medium
+  relevance for DD/Timely/Differential questions. High-relevance posts include
+  DD memory/self-compaction, virtual time, strong consistency, query
+  introspection, and beyond-RAM operation.
+- **Source path:** `sources/materialize-blog/index.json`,
+  `sources/materialize-blog/relevance-index.md`,
+  `findings/source-notes/materialize-blog.md`
+- **Derived conclusion:** The Materialize blog is useful supplemental production
+  evidence for performance interpretation and runtime instrumentation, but it
+  should not be treated as egglog-specific semantic evidence.
+- **Confidence:** Medium / High.
+- **Relevance:** Adds a current production DD/Timely source without changing
+  the relation-only oracle gate.
+
+## E-027 - Memory And Compaction Need Trial Instrumentation
+
+- **Source fact:** Materialize posts on DD memory management, temporal filters,
+  virtual time, replica expiration, and scaling beyond memory repeatedly frame
+  state size, compaction/resource bounding, and retained history as first-order
+  properties of sustained incremental workloads.
+- **Source path:**
+  `sources/materialize-blog/posts/2020-03-26-managing-memory-with-differential-dataflow.md`,
+  `sources/materialize-blog/posts/2021-02-16-temporal-filters.md`,
+  `sources/materialize-blog/posts/2022-06-14-virtual-time-consistency-scalability.md`,
+  `sources/materialize-blog/posts/2025-01-13-replica-expiration.md`,
+  `sources/materialize-blog/posts/2025-09-18-scaling-beyond-memory.md`,
+  `findings/source-notes/materialize-blog.md`
+- **Derived conclusion:** Once the minimal trial moves from semantic parity to
+  performance, it should record memory/state growth, retained arrangements or
+  traces, compaction/frontier progress, and setup cost rather than only elapsed
+  time.
+- **Confidence:** Medium / High.
+- **Relevance:** Sharpens the future measurement schema for interpreting DD
+  results.
+
+## E-028 - Join Performance Requires Arrangement-Aware Planning
+
+- **Source fact:** Materialize posts on join maintenance, indexes, and delta
+  joins identify shared arrangements, index choice, delta-style plans, and late
+  materialization as major cost levers for maintaining joins over updates.
+- **Source path:**
+  `sources/materialize-blog/posts/2021-06-02-maintaining-joins-using-few-resources.md`,
+  `sources/materialize-blog/posts/2022-07-27-indexes-a-silent-frenemy.md`,
+  `sources/materialize-blog/posts/2023-01-18-delta-joins.md`,
+  `findings/source-notes/materialize-blog.md`
+- **Derived conclusion:** The current generic relation evaluator is acceptable
+  as a semantic canary, but performance trials should split or arrange by
+  relation/key and record join-plan shape before interpreting speed or memory
+  results.
+- **Confidence:** High.
+- **Relevance:** Directly qualifies the first acceptance gate before it is used
+  for timing.
+
+## E-029 - Recursive Speedups Need Mechanism-Level Attribution
+
+- **Source fact:** Materialize posts on recursion describe recursive SQL and
+  DD-style iterative/fixpoint execution, while the Timely speedup post
+  attributes a large improvement to progress-tracking/runtime mechanics rather
+  than to a logical query change.
+- **Source path:**
+  `sources/materialize-blog/posts/2022-12-25-recursion-in-materialize.md`,
+  `sources/materialize-blog/posts/2023-07-12-recursive-ctes-in-materialize.md`,
+  `sources/materialize-blog/posts/2026-03-19-speeding-up-timely-dataflow.md`,
+  `findings/source-notes/materialize-blog.md`
+- **Derived conclusion:** Recursive/fixpoint workloads should be reported
+  separately from non-recursive joins, and any large speedup or slowdown should
+  be attributed to a visible mechanism such as progress tracking, timestamp
+  policy, arrangement reuse, or runtime setup.
+- **Confidence:** Medium.
+- **Relevance:** Keeps performance interpretation aligned with the mapping-first
+  purpose of the external DD trial.

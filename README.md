@@ -35,6 +35,8 @@ Raw and low-level evidence is preserved in place:
 - `messages/`: design conversations and meeting notes.
 - `papers/`: local papers.
 - `repos/`: vendored source checkouts used as evidence.
+- `sources/`: external source snapshots, currently the Materialize blog
+  corpus and relevance index.
 - `code/`: prototypes, including the DD design spike, schedule-overlap code,
   and the minimal DD trial preflight.
 - `findings/artifacts/`: generated JSON artifacts and measured lane outputs.

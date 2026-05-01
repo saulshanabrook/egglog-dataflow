@@ -1,0 +1,10 @@
+(relation pair (i64 i64))
+(relation same (i64))
+
+(rule ((pair x x))
+      ((same x)))
+
+(pair 1 1)
+(pair 1 2)
+(pair 2 2)
+(run 1)

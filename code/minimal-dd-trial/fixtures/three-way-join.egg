@@ -1,0 +1,17 @@
+(relation a (i64 i64))
+(relation b (i64 i64))
+(relation c (i64 i64))
+(relation out (i64 i64))
+
+(rule ((a x y) (b y z) (c z w))
+      ((out x w)))
+
+(a 1 2)
+(a 9 9)
+(b 2 3)
+(b 2 4)
+(b 9 3)
+(c 3 5)
+(c 4 6)
+(c 8 8)
+(run 1)

@@ -14,13 +14,15 @@ claims are made.
 | [`synthesis.md`](synthesis.md) | Compact current conclusions that cite ledger IDs. |
 | [`methodology.md`](methodology.md) | Source inventory only: raw conversations, papers, vendored repos, artifacts, and reading order. |
 | [`source-notes/`](source-notes/) | Detailed source-cluster notes from the reading passes. |
+| [`source-notes/materialize-blog.md`](source-notes/materialize-blog.md) | Materialize blog reading pass and production DD/Timely evidence summary. |
 | [`experiments/option-3/README.md`](experiments/option-3/README.md) | Ordered index of existing Option 3 artifacts and measured lane outputs. |
 | [`archive/2026-04-prior-backend-plans/`](archive/2026-04-prior-backend-plans/) | Superseded synthesized backend-option and scaffold planning docs. |
 
 The current runnable preflight lives in
 [`../code/minimal-dd-trial/`](../code/minimal-dd-trial/). It is intentionally
-small: relation-only reachability, lower-row native oracle export, and a first
-DD comparison (`E-022`, `E-024`).
+small: relation-only native oracle export and DD comparisons for recursive
+reachability, repeated-variable filtering, and a three-way join (`E-022`,
+`E-024`, `E-025`).
 
 ## Current Status
 
@@ -36,7 +38,8 @@ repeat superseded implementation instructions (`E-011`, `E-012`, `E-013`).
 ## Update Discipline
 
 - Preserve raw evidence: `messages/`, `papers/`, `repos/`, `code/`, and
-  `findings/artifacts/`.
+  `sources/`.
+- Preserve generated evidence artifacts under `findings/artifacts/`.
 - Put new synthesized conclusions in [`evidence-ledger.md`](evidence-ledger.md)
   before repeating them in other active docs.
 - In active docs, cite ledger IDs or raw source paths for non-obvious claims.

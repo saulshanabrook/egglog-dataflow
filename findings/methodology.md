@@ -56,6 +56,12 @@ in [`synthesis.md`](synthesis.md), and claim provenance lives in
 | `../repos/columnar` | Columnar container library relevant to DD/Timely data layout. |
 | `../repos/blog` | Frank McSherry blog archive for DD, WCOJ, datatoad, columnar, and e-graph context. |
 
+## External Source Snapshots
+
+| Path | Role |
+| --- | --- |
+| `../sources/materialize-blog/` | Materialize blog snapshot and relevance index for production DD/Timely evidence around incremental view maintenance, joins, recursion, memory/compaction, consistency, and performance attribution. |
+
 ## Prototypes And Artifacts
 
 | Path | Role |
@@ -76,6 +82,7 @@ in [`synthesis.md`](synthesis.md), and claim provenance lives in
 | `source-notes/scaling-equality-saturation.md` | Eli backend draft evidence for schedules, seminaive freshness, native Free Join, and DD future work. |
 | `source-notes/extension-models.md` | Comparative extension/provider models. |
 | `source-notes/conversations-social.md` | Social and collaboration motivation from local conversations. |
+| `source-notes/materialize-blog.md` | Materialize blog reading pass: production DD/Timely evidence, relevance classes, and non-implications for the external DD trial. |
 
 ## Historical Synthesis
 
@@ -93,4 +100,5 @@ use the active ledger for current conclusions.
 6. `source-notes/containers-frontends.md`
 7. `source-notes/differential-timely.md`
 8. `source-notes/datalog-wcoj-planning.md`
-9. `experiments/option-3/README.md`
+9. `source-notes/materialize-blog.md`
+10. `experiments/option-3/README.md`
