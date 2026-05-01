@@ -14,7 +14,7 @@ By the end, the acceptance report should say `all_match_oracle: true` for
 three scenarios:
 
 - reachability derives six `path` rows from three `edge` rows;
-- repeated-variable matching keeps only `(1, 1)` and `(2, 2)`;
+- repeated-variable matching derives `same(1)` and `same(2)`;
 - a three-way join derives `out(1, 5)`, `out(1, 6)`, and `out(9, 5)`.
 
 ## Before you start
@@ -85,10 +85,12 @@ egglog's stored function-table rows.
 
 ## What this walkthrough leaves aside
 
-This first pass only follows relation facts and relation rules over `i64`.
-Equality/rebuild, containers, custom schedulers, host callbacks, extraction,
-proofs, direct `ResolvedCoreRule` export, and performance measurement are
-later gates. Keep that boundary in mind, but do not follow those threads yet.
+This first pass only follows static, positive, single-head relation rules
+over `i64` tuples with set semantics. Actions, primitive predicates,
+negation/antijoin, aggregation, dynamic epochs, equality/rebuild,
+containers, custom schedulers, host callbacks, extraction, proofs, direct
+`ResolvedCoreRule` export, and performance measurement are later gates. Keep
+that boundary in mind, but do not follow those threads yet.
 
 ## The path through the code
 
@@ -100,7 +102,7 @@ We will follow one successful run in four steps.
 3. [`dd_evaluate_scenario`] builds the DD collections and captures signed
    updates.
 4. The host nets those signed updates into visible rows and compares them
-   with the native lower-row oracle.
+   with the native stored-row oracle.
 
 Notice the repeated pattern: each section turns one representation into the
 next, then checks a concrete row set.
@@ -421,9 +423,10 @@ gives us one finished result to compare with the oracle.
 
 `new_collection_from` converts an ordinary Rust iterator into an
 initial DD collection at time zero with positive unit diffs. The
-handle is ignored because these fixtures are static; dynamic
-update experiments would keep it, advance time, and feed signed
-changes across epochs.
+handle is ignored because these fixtures are static. Dynamic
+update experiments would keep it, advance time, feed signed
+changes across epochs, and report contents at a chosen final
+data time instead of using this static netting shortcut.
 
 ```rust
             let (_input, collection) = scope.new_collection_from(facts);
@@ -460,25 +463,37 @@ only below by summing diffs per row.
         relation_rows.consolidate().inner.capture()
     });
 
+    Ok(net_visible_rows_from_static_capture(captured.extract()))
+}
+
 ```
 
-Capture gives us signed DD updates, not final rows. Sum the diffs first.
-A row is visible only when its net diff is positive. This is the key
-check: the tutorial compares final relation contents, not raw update
-events.
+Net captured DD updates into visible rows for the static tutorial fixtures.
+
+Capture gives us signed DD updates, not final rows. Because these fixtures
+load all facts at the initial time and run to quiescence, it is correct to
+ignore capture/data timestamps and sum every diff by row. A dynamic trial
+would need a different helper that chooses a final data time and reports the
+rows visible at that epoch.
 
 ```rust
+fn net_visible_rows_from_static_capture<C, CaptureTime, DataTime>(
+    captured: C,
+) -> BTreeSet<RelationRow>
+where
+    C: IntoIterator<Item = (CaptureTime, Vec<(RelationRow, DataTime, isize)>)>,
+{
     let mut diffs = BTreeMap::<RelationRow, isize>::new();
-    for (_capture_time, batch) in captured.extract() {
+    for (_capture_time, batch) in captured {
         for (row, _data_time, diff) in batch {
             *diffs.entry(row).or_insert(0) += diff;
         }
     }
 
-    Ok(diffs
+    diffs
         .into_iter()
         .filter_map(|(row, diff)| (diff > 0).then_some(row))
-        .collect())
+        .collect()
 }
 
 ```
@@ -864,8 +879,9 @@ Build reusable relation/key arrangements required by the planned joins.
 
 The registry is keyed by `(relation, key_columns)`, so two rules that probe
 the same relation on the same column set share one maintained DD
-arrangement. Intermediate binding streams are still arranged at each join
-point because their schema is rule-local.
+arrangement within the current rule-application pass. Intermediate binding
+streams are still arranged at each join point because their schema is
+rule-local; this is a performance-aware shape, not a benchmark result.
 
 ```rust
 fn relation_arrangements<'scope, T>(
