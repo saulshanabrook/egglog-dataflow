@@ -7,6 +7,9 @@
 //! Differential Dataflow. The comparison deliberately projects logical `i64`
 //! input tuples and keeps lower-row output ids, raw values, sorts, and
 //! `subsumed` flags as debug evidence.
+//! Here "lower rows" means egglog's function-table rows below the rendered
+//! `print-function` / `TermDag` layer: the stored input values, output value,
+//! and subsumption bit used by the database.
 //!
 //! Implemented capacity is intentionally narrow: base `i64` relation facts,
 //! relation atoms, repeated-variable equality filters, natural joins over shared
@@ -19,19 +22,41 @@
 //! `ResolvedCoreRule` export, and performance measurement are not modeled here.
 //! The point of this crate is to make the first DD mapping concrete enough that
 //! later semantic and performance questions have a stable baseline.
+//!
+//! ## How to read the DD/Timely side
+//!
+//! The DD evaluator starts in [`dd_evaluate_scenario`]. The outer `timely`
+//! call builds and runs one Timely dataflow. Inside that dataflow, the code uses
+//! Differential Dataflow collections: streams of updates shaped like
+//! `(data, logical_time, diff)`, where positive diffs insert records and
+//! negative diffs retract records. The visible set at the end is not "all
+//! positive updates"; it is the net sum of diffs per row after the dataflow has
+//! quiesced.
+//!
+//! Most of this file is deliberately small and explicit. It teaches the mapping
+//! the MVP needs before it tries to be a planner: facts become relation-local
+//! DD collections, rules compile from string variable names to column-position
+//! plans, recursion uses DD's iterative scope, joins use reusable arrangements,
+//! and output uses Timely capture so tests can net signed updates on the host.
+//!
+//! The important distinction is that Timely supplies the execution substrate:
+//! scopes, timestamps, progress, nested loops, and capture. Differential
+//! Dataflow supplies the collection algebra on top: `map`, `filter`, `concat`,
+//! `distinct`, `arrange_by_key`, `join_core`, and `Variable`.
 
+use differential_dataflow::input::Input;
+use differential_dataflow::lattice::Lattice;
+use differential_dataflow::operators::iterate::Variable;
+use differential_dataflow::VecCollection;
+use egglog::{EGraph, Value};
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::fs;
 use std::path::Path;
-use std::sync::{Arc, Mutex};
-
-use differential_dataflow::input::Input;
-use differential_dataflow::lattice::Lattice;
-use differential_dataflow::operators::Iterate;
-use differential_dataflow::VecCollection;
-use egglog::{EGraph, Value};
-use serde::{Deserialize, Serialize};
+use timely::dataflow::operators::capture::Extract;
+use timely::dataflow::operators::Capture;
+use timely::order::Product;
 use timely::progress::Timestamp;
 
 pub type TrialResult<T> = Result<T, Box<dyn Error + Send + Sync>>;
@@ -165,23 +190,110 @@ pub struct TrialReport {
     pub limitations: Vec<String>,
 }
 
-type Binding = BTreeMap<String, i64>;
-type RelationCollection<'scope, T> = VecCollection<'scope, T, RelationRow, isize>;
+/// Relation-local DD collection used by the evaluator.
+///
+/// A `VecCollection<'scope, T, D, R>` is Differential Dataflow's multiset-like
+/// collection abstraction in a Timely scope. Here `D = Vec<i64>` is one logical
+/// tuple for a single relation and `R = isize` is the signed difference type:
+/// `+1` means an occurrence arrives, `-1` means it is retracted, and larger
+/// magnitudes are possible after aggregation.
+type ValueCollection<'scope, T> = VecCollection<'scope, T, Vec<i64>, isize>;
+
+/// DD collection after relation-local values are reattached to relation names.
+///
+/// Internally we avoid a mixed row collection while planning rules, because
+/// scanning all rows for every atom hides the relation/key structure that DD is
+/// good at exploiting. We only rebuild mixed `RelationRow`s at the output
+/// boundary so reporting and oracle comparison stay simple.
+type RowCollection<'scope, T> = VecCollection<'scope, T, RelationRow, isize>;
+
+/// DD collection of partial rule bindings.
+///
+/// During a rule join, each record is a compact vector indexed by compiled
+/// variable id. This replaces string-keyed maps in the hot path and makes join
+/// keys explicit column projections.
+type BindingCollection<'scope, T> = VecCollection<'scope, T, BindingRow, isize>;
+
+/// Registry key for a maintained arrangement: relation name plus key columns.
+///
+/// Arrangements are DD's reusable indexed representation of a collection. The
+/// same relation can be arranged several ways if different rules probe it by
+/// different shared-variable columns.
+type ArrangementKey = (String, Vec<usize>);
+
+/// Concrete arrangement type for `Vec<i64>` relation tuples.
+///
+/// This alias is noisy because it exposes DD's lower trace implementation. The
+/// useful idea is simpler: an `Arranged` collection is logically the same data
+/// as the input relation, but maintained as keyed batches/traces so joins can
+/// reuse indexed state instead of rebuilding an index at every probe.
+type RelationArrangement<'scope, T> = differential_dataflow::operators::arrange::Arranged<
+    'scope,
+    differential_dataflow::operators::arrange::TraceAgent<
+        differential_dataflow::trace::implementations::ValSpine<Vec<i64>, Vec<i64>, T, isize>,
+    >,
+>;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+struct VarId(usize);
+
+/// Compiled atom term.
+///
+/// Public scenarios use variable names for readability. The DD operators use
+/// `VarId`s so a binding can be a vector lookup instead of a map lookup.
+#[derive(Clone, Debug)]
+enum PlannedTerm {
+    Var(VarId),
+    Const(i64),
+}
+
+/// Body or head atom after lowering names to relation metadata.
+///
+/// `vars` is cached because each join step needs to know which variables are
+/// already bound on the left and which variables an atom can contribute.
+#[derive(Clone, Debug)]
+struct PlannedAtom {
+    relation: String,
+    terms: Vec<PlannedTerm>,
+    vars: BTreeSet<VarId>,
+}
+
+/// Rule after the once-per-scenario compile pass.
+///
+/// `var_count` fixes the width of each [`BindingRow`]. Body atoms can introduce
+/// variables; head atoms may only project variables already bound by the body.
+#[derive(Clone, Debug)]
+struct PlannedRule {
+    name: String,
+    body: Vec<PlannedAtom>,
+    head: PlannedAtom,
+    var_count: usize,
+}
+
+/// Compact partial assignment carried through DD joins.
+///
+/// The vector position is a [`VarId`]. `None` means this variable has not been
+/// bound by the atoms processed so far; `Some(value)` means every occurrence of
+/// that variable must agree with `value`.
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
+struct BindingRow {
+    values: Vec<Option<i64>>,
+}
 
 /// All scenarios currently included in the first semantic acceptance gate.
-pub fn acceptance_scenarios() -> Vec<ScenarioSpec> {
-    vec![
-        path_scenario(),
-        repeated_variable_scenario(),
-        three_way_join_scenario(),
-    ]
+pub fn acceptance_scenarios() -> TrialResult<Vec<ScenarioSpec>> {
+    Ok(vec![
+        path_scenario()?,
+        repeated_variable_scenario()?,
+        three_way_join_scenario()?,
+    ])
 }
 
 /// Recursive reachability scenario.
 ///
 /// This is the smallest recursive DD shape in the gate: base `edge` facts,
 /// direct `edge -> path`, and recursive `path(x,y), edge(y,z) -> path(x,z)`.
-pub fn path_scenario() -> ScenarioSpec {
+pub fn path_scenario() -> TrialResult<ScenarioSpec> {
     scenario(
         "path-reachability",
         PATH_REACHABILITY_EGG,
@@ -211,7 +323,7 @@ pub fn path_scenario() -> ScenarioSpec {
 ///
 /// The body atom `(pair x x)` checks that atom matching treats repeated
 /// variables as equality constraints before rules are joined or projected.
-pub fn repeated_variable_scenario() -> ScenarioSpec {
+pub fn repeated_variable_scenario() -> TrialResult<ScenarioSpec> {
     scenario(
         "repeated-variable",
         REPEATED_VARIABLE_EGG,
@@ -231,7 +343,7 @@ pub fn repeated_variable_scenario() -> ScenarioSpec {
 ///
 /// This checks that the rule lowering can chain shared-variable joins across
 /// more than two body atoms without relying on reachability-specific code.
-pub fn three_way_join_scenario() -> ScenarioSpec {
+pub fn three_way_join_scenario() -> TrialResult<ScenarioSpec> {
     let mut facts = rows("a", &[&[1, 2], &[9, 9]]);
     facts.extend(rows("b", &[&[2, 3], &[2, 4], &[9, 3]]));
     facts.extend(rows("c", &[&[3, 5], &[4, 6], &[8, 8]]));
@@ -268,11 +380,11 @@ fn scenario(
     observed_functions: &[&str],
     facts: Vec<RelationRow>,
     rules: Vec<RuleSpec>,
-) -> ScenarioSpec {
+) -> TrialResult<ScenarioSpec> {
     let setup = fixture
         .trim_end()
         .strip_suffix(final_run_command)
-        .unwrap_or_else(|| panic!("fixture must end with {final_run_command:?}"))
+        .ok_or_else(|| format!("fixture must end with {final_run_command:?}"))?
         .trim_end()
         .to_string();
     let mut stages = vec![ScenarioStage {
@@ -287,13 +399,13 @@ fn scenario(
         });
     }
 
-    ScenarioSpec {
+    Ok(ScenarioSpec {
         name: name.to_string(),
         observed_functions: names(observed_functions),
         stages,
         facts,
         rules,
-    }
+    })
 }
 
 /// Run every acceptance scenario and assemble the aggregate report.
@@ -302,7 +414,8 @@ fn scenario(
 /// keeps its full oracle/DD row evidence in the report and flips
 /// `all_match_oracle` to false.
 pub fn run_acceptance_trial() -> TrialResult<TrialReport> {
-    let scenarios = acceptance_scenarios()
+    let specs = acceptance_scenarios()?;
+    let scenarios = specs
         .iter()
         .map(run_scenario_trial)
         .collect::<TrialResult<Vec<_>>>()?;
@@ -342,20 +455,28 @@ pub fn run_scenario_trial(spec: &ScenarioSpec) -> TrialResult<ScenarioReport> {
         .iter()
         .map(|function| Ok((function.clone(), logical_rows(final_snapshot, function)?)))
         .collect::<TrialResult<BTreeMap<_, _>>>()?;
-    let dd_rows = dd_evaluate_scenario(spec);
+    let dd_rows = dd_evaluate_scenario(spec)?;
+    let mut dd_grouped = BTreeMap::<String, Vec<LogicalRow>>::new();
+    for row in dd_rows {
+        dd_grouped
+            .entry(row.relation.clone())
+            .or_default()
+            .push(LogicalRow {
+                function: row.relation,
+                values: row.values,
+            });
+    }
+    for rows in dd_grouped.values_mut() {
+        rows.sort();
+    }
     let dd_logical_rows = spec
         .observed_functions
         .iter()
         .map(|function| {
-            let rows = dd_rows
-                .iter()
-                .filter(|row| row.relation == *function)
-                .map(|row| LogicalRow {
-                    function: function.clone(),
-                    values: row.values.clone(),
-                })
-                .collect::<Vec<_>>();
-            (function.clone(), rows)
+            (
+                function.clone(),
+                dd_grouped.remove(function).unwrap_or_default(),
+            )
         })
         .collect();
     let matches_oracle = dd_logical_rows == oracle_final_rows;
@@ -416,74 +537,78 @@ pub fn write_report(path: impl AsRef<Path>, report: &TrialReport) -> TrialResult
 
 /// Evaluate one scenario with a tiny relation-only DD fixpoint.
 ///
-/// The dataflow imports all scenario facts at one outer timestamp, repeatedly
-/// derives rule heads from the current closure, and returns the set of rows with
-/// a positive net differential count after the fixpoint stabilizes. This models
-/// final relation contents only; native per-stage scheduling and per-rule
-/// freshness are intentionally outside this first evaluator.
-pub fn dd_evaluate_scenario(spec: &ScenarioSpec) -> BTreeSet<RelationRow> {
-    let facts = spec.facts.clone();
-    let rules = spec.rules.clone();
-    let diffs = Arc::new(Mutex::new(BTreeMap::<RelationRow, isize>::new()));
-    let diffs_for_worker = Arc::clone(&diffs);
+/// The dataflow imports facts as relation-local collections, compiles rules to
+/// variable ids and column offsets, runs relation-local recursive variables to a
+/// fixpoint, and captures signed DD updates at the explicit output boundary.
+/// This still models final relation contents only; native per-stage scheduling
+/// and per-rule freshness remain follow-up witnesses.
+pub fn dd_evaluate_scenario(spec: &ScenarioSpec) -> TrialResult<BTreeSet<RelationRow>> {
+    // Planning happens before the Timely dataflow is built. That keeps the
+    // closure that constructs operators focused on data movement, not string
+    // lookup or scenario validation.
+    let planned_rules = compile_rules(&spec.rules)?;
+    let relation_names = relation_names(spec);
+    if relation_names.is_empty() {
+        return Ok(BTreeSet::new());
+    }
 
-    timely::execute_directly(move |worker| {
-        let (mut input, probe) = worker.dataflow::<u64, _, _>(move |scope| {
-            // Timely still supplies the worker and progress tracking, but the
-            // actual evaluator starts as a Differential `Collection` and stays
-            // in collection operators from this point on.
-            let (input, base_rows) = scope.new_collection_from(facts);
-            let base_rows_for_iter = base_rows.clone();
+    let facts_by_relation = fact_values_by_relation(&spec.facts);
 
-            // DD fixpoint shape:
-            //
-            // - `base_rows` is the static fact collection in the outer scope.
-            //   Entering it into the nested scope makes the facts available at
-            //   every recursive iteration without re-sending them from Rust.
-            // - `rows` is Differential's current approximation of the closure.
-            //   Each rule derives candidate head rows from that approximation.
-            // - `concat(...).distinct()` implements set semantics: duplicates
-            //   can be produced by multiple rules or iterations, but the visible
-            //   relation contains each logical tuple once.
-            let closure = base_rows.iterate(move |inner_scope, rows| {
-                let base_rows = base_rows_for_iter.clone().enter(inner_scope);
-                let empty = rows.clone().filter(|_| false);
-                let derived = rules.iter().cloned().fold(empty, |acc, rule| {
-                    acc.concat(apply_rule(rows.clone(), rule))
-                });
-                base_rows.concat(derived).distinct()
-            });
+    // `timely::example` is the single-worker convenience runner. It creates a
+    // Timely worker, lets the closure build one dataflow graph, runs it to
+    // completion, and returns the value produced by the closure. A future
+    // performance harness will likely use explicit workers/probes so it can
+    // control input epochs; this semantic gate only needs a completed result.
+    let captured = timely::example(move |scope| {
+        let mut base_by_relation = BTreeMap::new();
+        for relation in &relation_names {
+            let facts = facts_by_relation.get(relation).cloned().unwrap_or_default();
 
-            // Differential collections emit signed updates, not a final Vec.
-            // `consolidate` coalesces updates at the current timestamp, and
-            // `inspect` lets this single-process test harness copy those diffs
-            // back to Rust. We still net by row on the host side because future
-            // rules with negation/residual behavior can produce meaningful
-            // negative corrections before the final visible set is known.
-            let diffs = Arc::clone(&diffs_for_worker);
-            let (probe, _) = closure
-                .consolidate()
-                .inspect(move |(row, _time, diff)| {
-                    let mut diffs = diffs.lock().expect("DD result map poisoned");
-                    *diffs.entry(row.clone()).or_insert(0) += *diff;
-                })
-                .probe();
+            // `new_collection_from` converts an ordinary Rust iterator into an
+            // initial DD collection at time zero with positive unit diffs. The
+            // handle is ignored because these fixtures are static; dynamic
+            // update experiments would keep it, advance time, and feed signed
+            // changes across epochs.
+            let (_input, collection) = scope.new_collection_from(facts);
+            base_by_relation.insert(relation.clone(), collection);
+        }
 
-            (input, probe)
+        // The evaluator keeps one collection per relation until the end. That
+        // shape mirrors how DD joins want to see data: relation-local streams
+        // can be arranged by relation-specific keys and reused.
+        let relation_rows = relation_rows_from_collections(relation_fixpoint(
+            base_by_relation,
+            relation_names,
+            planned_rules,
+        ))
+        .unwrap_or_else(|| {
+            let (_input, empty) = scope.new_collection_from(Vec::<RelationRow>::new());
+            empty
         });
-        input.advance_to(1);
-        input.flush();
-        // The probe is the handoff point from Timely progress to the host test:
-        // after it is no longer less than the input time, all dataflow work
-        // caused by the inserted facts has completed.
-        worker.step_while(|| probe.less_than(input.time()));
+
+        // `consolidate` combines equal `(row, time)` updates before capture.
+        // It is not the semantic comparison by itself; it just reduces the
+        // amount of update traffic that leaves the dataflow. `.inner` exposes
+        // the underlying Timely stream of DD update batches. Capture gives the
+        // host the raw signed update batches; the semantic row set is computed
+        // only below by summing diffs per row.
+        relation_rows.consolidate().inner.capture()
     });
 
-    let diffs = diffs.lock().expect("DD result map poisoned");
-    diffs
-        .iter()
-        .filter_map(|(row, diff)| (*diff > 0).then_some(row.clone()))
-        .collect()
+    // Capture records the timely stream's data and progress events without a
+    // host-side mutex in an operator closure. We still net signed DD updates on
+    // the host before deciding which logical rows are visible.
+    let mut diffs = BTreeMap::<RelationRow, isize>::new();
+    for (_capture_time, batch) in captured.extract() {
+        for (row, _data_time, diff) in batch {
+            *diffs.entry(row).or_insert(0) += diff;
+        }
+    }
+
+    Ok(diffs
+        .into_iter()
+        .filter_map(|(row, diff)| (diff > 0).then_some(row))
+        .collect())
 }
 
 /// Fetch projected logical rows for one function from an oracle snapshot.
@@ -495,116 +620,402 @@ pub fn logical_rows(snapshot: &OracleSnapshot, function: &str) -> TrialResult<Ve
         .ok_or_else(|| format!("missing logical rows for function {function}").into())
 }
 
-/// Lower and evaluate one relation rule inside a DD scope.
+/// Build one relation-local recursive fixpoint for the scenario.
 ///
-/// Each body atom becomes a collection of bindings from variable names to `i64`
-/// values. Body atoms are then joined on variables they share with previous
-/// atoms. If there are no shared variables, the join key is empty and the result
-/// is the expected Cartesian product for independent atoms.
-fn apply_rule<'scope, T>(
-    rows: RelationCollection<'scope, T>,
-    rule: RuleSpec,
-) -> RelationCollection<'scope, T>
+/// This function splits rules into pre-loop, loop, and post-loop phases, then
+/// delegates the actual Timely iterative scope to
+/// [`recursive_relation_fixpoint`]. The split keeps acyclic relations out of
+/// the DD feedback loop while still letting cyclic relations reach a fixed
+/// point.
+fn relation_fixpoint<'scope, T>(
+    base_by_relation: BTreeMap<String, ValueCollection<'scope, T>>,
+    relation_names: Vec<String>,
+    rules: Vec<PlannedRule>,
+) -> BTreeMap<String, ValueCollection<'scope, T>>
 where
     T: Timestamp + Lattice + Ord + 'static,
+    T::Summary: Default + Clone,
 {
-    let Some((first, rest)) = rule.body.split_first() else {
-        return rows.filter(|_| false);
-    };
+    // We first classify rule heads by whether they are in a dependency cycle.
+    // This is a deliberately small SCC approximation: enough to avoid putting
+    // every relation in the loop, while still treating cyclic relations as
+    // iterative state. Nonrecursive rules can run in ordinary DD scopes.
+    let recursive_relations = recursive_relations(&rules);
+    let mut pre_rules = Vec::new();
+    let mut recursive_rules = Vec::new();
+    let mut post_rules = Vec::new();
 
-    // Start from the first atom's matching rows, then join in each additional
-    // atom. This mirrors a simple left-deep relational plan; it is deliberately
-    // not a WCOJ or optimized physical planner yet.
-    let mut bindings = atom_bindings(rows.clone(), first.clone());
-    let mut known_vars = atom_vars(first);
-
-    for atom in rest.iter().cloned() {
-        let atom_vars = atom_vars(&atom);
-        let shared = known_vars
-            .intersection(&atom_vars)
-            .cloned()
-            .collect::<Vec<_>>();
-        let shared_for_left = shared.clone();
-        let shared_for_right = shared.clone();
-        let atom_side = atom_bindings(rows.clone(), atom);
-
-        bindings = bindings
-            .map(move |binding| (binding_key(&binding, &shared_for_left), binding))
-            .join_map(
-                atom_side.map(move |binding| (binding_key(&binding, &shared_for_right), binding)),
-                |_key, left, right| {
-                    let mut merged = left.clone();
-                    for (name, value) in right {
-                        if let Some(existing) = merged.insert(name.clone(), *value) {
-                            assert_eq!(
-                                existing, *value,
-                                "bindings joined on shared variables should merge"
-                            );
-                        }
-                    }
-                    merged
-                },
-            );
-
-        known_vars.extend(atom_vars);
+    for rule in rules.iter().cloned() {
+        if recursive_relations.contains(&rule.head.relation) {
+            recursive_rules.push(rule);
+        } else if rule_uses_any_relation(&rule, &recursive_relations) {
+            post_rules.push(rule);
+        } else {
+            pre_rules.push(rule);
+        }
     }
 
-    let head = rule.head;
-    // Project successful body bindings into the head relation. A missing head
-    // variable drops the binding, which keeps malformed scenario specs from
-    // silently inventing values.
-    bindings.flat_map(move |binding| {
-        let mut values = Vec::with_capacity(head.terms.len());
-        for term in &head.terms {
-            match term {
-                AtomTerm::Var(name) => values.push(*binding.get(name)?),
-                AtomTerm::Const(value) => values.push(*value),
+    // Rules whose heads and bodies are outside the cyclic relation set run
+    // first. Rules producing cyclic relations run inside the loop, including
+    // nonrecursive seed rules such as `edge -> path`. Finally, rules that
+    // depend on recursive outputs but do not themselves feed a cycle are
+    // saturated once the recursive fixed point is available.
+    let mut relations = apply_nonrecursive_rules(base_by_relation, &pre_rules);
+    if !recursive_relations.is_empty() {
+        let recursive_outputs = recursive_relation_fixpoint(
+            relations.clone(),
+            relation_names,
+            recursive_relations,
+            recursive_rules,
+        );
+        for (relation, collection) in recursive_outputs {
+            relations.insert(relation, collection);
+        }
+    }
+
+    apply_nonrecursive_rules(relations, &post_rules)
+}
+
+/// Run the recursive part of the rule set in one Timely iterative scope.
+///
+/// Timely timestamps in an iterative scope are product timestamps: the outer
+/// time tracks the input epoch, and the inner `u64` coordinate tracks loop
+/// iterations. DD's [`Variable`] uses a Timely feedback edge under the hood to
+/// circulate only the changes that have not yet reached a fixed point.
+fn recursive_relation_fixpoint<'scope, T>(
+    base_by_relation: BTreeMap<String, ValueCollection<'scope, T>>,
+    relation_names: Vec<String>,
+    recursive_relations: BTreeSet<String>,
+    rules: Vec<PlannedRule>,
+) -> BTreeMap<String, ValueCollection<'scope, T>>
+where
+    T: Timestamp + Lattice + Ord + 'static,
+    T::Summary: Default + Clone,
+{
+    let Some(outer) = base_by_relation
+        .values()
+        .next()
+        .map(|collection| collection.scope())
+    else {
+        return BTreeMap::new();
+    };
+
+    let mut rules_by_head = BTreeMap::<String, Vec<PlannedRule>>::new();
+    for rule in rules.iter().cloned() {
+        rules_by_head
+            .entry(rule.head.relation.clone())
+            .or_default()
+            .push(rule);
+    }
+
+    // `iterative` opens a nested Timely scope. Collections from the outer scope
+    // must be `enter`ed to participate in the loop, and loop results must
+    // `leave` back to the outer scope. The type parameter `u64` is the loop
+    // timestamp coordinate.
+    outer.clone().iterative::<u64, _, _>(move |nested| {
+        // The feedback summary advances only the inner loop coordinate by one;
+        // the outer timestamp stays at the input epoch.
+        let summary = Product::new(Default::default(), 1);
+        let mut variables = Vec::new();
+        let mut current_by_relation = BTreeMap::new();
+
+        for relation in &relation_names {
+            if let Some(base) = base_by_relation.get(relation) {
+                if recursive_relations.contains(relation) {
+                    // `Variable::new_from` exposes a collection named
+                    // `current` whose logical contents are base rows plus the
+                    // current feedback rows. When we later call `set(next)`,
+                    // DD subtracts the original base before feeding rows back,
+                    // so the loop sends only the incremental correction. That
+                    // is why `next` is written as the whole desired relation,
+                    // not just the newly derived rows.
+                    let (variable, current) =
+                        Variable::new_from(base.clone().enter(nested), summary.clone());
+                    variables.push((relation.clone(), variable));
+                    current_by_relation.insert(relation.clone(), current);
+                } else {
+                    // Nonrecursive relations are stable facts from the loop's
+                    // perspective. They can still be arranged and joined
+                    // inside the loop, but no feedback variable is needed.
+                    current_by_relation.insert(relation.clone(), base.clone().enter(nested));
+                }
             }
         }
 
-        Some(RelationRow {
-            relation: head.relation.clone(),
-            values,
-        })
-    })
-}
+        // Build arrangements over the current loop collections. For recursive
+        // relations these arrangements are maintained as the loop discovers
+        // new rows; for stable relations they are ordinary indexed inputs.
+        let arrangements = relation_arrangements(&current_by_relation, &rules);
+        let mut next_inner = BTreeMap::new();
+        let mut outputs = BTreeMap::new();
+        for relation in &recursive_relations {
+            let Some(base_outer) = base_by_relation.get(relation) else {
+                continue;
+            };
+            let base = base_outer.clone().enter(nested);
+            let mut derived = base.clone().filter(|_| false);
 
-/// Convert relation rows matching one atom into variable bindings.
-///
-/// This is a DD `flat_map`: non-matching rows produce no binding, matching rows
-/// produce exactly one binding.
-fn atom_bindings<'scope, T>(
-    rows: RelationCollection<'scope, T>,
-    atom: Atom,
-) -> VecCollection<'scope, T, Binding, isize>
-where
-    T: Timestamp + Lattice + Ord + 'static,
-{
-    rows.flat_map(move |row| match_atom(row, &atom))
-}
-
-/// Match one logical relation row against one atom outside DD.
-///
-/// The returned binding is the row-level payload that DD later joins. Repeated
-/// variables are checked here so later joins can treat a binding as internally
-/// consistent.
-fn match_atom(row: RelationRow, atom: &Atom) -> Option<Binding> {
-    if row.relation != atom.relation || row.values.len() != atom.terms.len() {
-        return None;
-    }
-
-    let mut values = BTreeMap::new();
-    for (term, value) in atom.terms.iter().zip(row.values.iter().copied()) {
-        match term {
-            AtomTerm::Var(name) => {
-                // Repeated variables are equality filters, e.g. `(pair x x)`.
-                if let Some(existing) = values.insert(name.clone(), value) {
-                    if existing != value {
-                        return None;
+            if let Some(rules) = rules_by_head.get(relation) {
+                for rule in rules.iter().cloned() {
+                    if let Some(rule_rows) =
+                        apply_planned_rule(&current_by_relation, &arrangements, rule)
+                    {
+                        derived = derived.concat(rule_rows);
                     }
                 }
             }
-            AtomTerm::Const(expected) => {
+
+            // `concat` preserves signed multiplicities from base and derived
+            // rows. `distinct` is the Datalog set-semantics boundary: DD treats
+            // a tuple with non-zero accumulated weight as one occurrence. It
+            // also provides the consolidation boundary required for a DD loop
+            // to stop circulating cancelable differences.
+            let next = base.concat(derived).distinct();
+            outputs.insert(relation.clone(), next.clone().leave(outer.clone()));
+            next_inner.insert(relation.clone(), next);
+        }
+
+        for (relation, variable) in variables {
+            if let Some(next) = next_inner.remove(&relation) {
+                // Binding the variable connects the loop feedback edge. The
+                // variable is consumed here so each recursive relation has
+                // exactly one definition inside this iterative scope.
+                variable.set(next);
+            }
+        }
+
+        outputs
+    })
+}
+
+/// Saturate a set of acyclic rules in the current scope.
+///
+/// The loop count is a conservative way to handle chains such as `a -> b` and
+/// `b -> c` without building a separate topological scheduler. Because these
+/// rules are outside a recursive SCC, repeatedly applying at most `rules.len()`
+/// rounds is enough for the small trial language. Each round rebuilds any
+/// required relation arrangements from the current relation collections.
+fn apply_nonrecursive_rules<'scope, T>(
+    mut relations: BTreeMap<String, ValueCollection<'scope, T>>,
+    rules: &[PlannedRule],
+) -> BTreeMap<String, ValueCollection<'scope, T>>
+where
+    T: Timestamp + Lattice + Ord + 'static,
+{
+    for _ in 0..rules.len() {
+        let arrangements = relation_arrangements(&relations, rules);
+        for rule in rules.iter().cloned() {
+            let head = rule.head.relation.clone();
+            let Some(current) = relations.get(&head).cloned() else {
+                continue;
+            };
+            if let Some(rule_rows) = apply_planned_rule(&relations, &arrangements, rule) {
+                relations.insert(head, current.concat(rule_rows).distinct());
+            }
+        }
+    }
+    relations
+}
+
+/// Lower and evaluate one compiled relation rule inside a DD scope.
+///
+/// Each atom reads only its own relation collection. The join pipeline then maps
+/// each side to an explicit shared-variable key, arranges those keyed bindings,
+/// and joins the arrangements with `join_core`.
+fn apply_planned_rule<'scope, T>(
+    relations: &BTreeMap<String, ValueCollection<'scope, T>>,
+    arrangements: &BTreeMap<ArrangementKey, RelationArrangement<'scope, T>>,
+    rule: PlannedRule,
+) -> Option<ValueCollection<'scope, T>>
+where
+    T: Timestamp + Lattice + Ord + 'static,
+{
+    let (first, rest) = rule.body.split_first()?;
+
+    // The first atom seeds the binding stream. At this point there is no join:
+    // matching one relation tuple either fails atom-local filters
+    // (constants/repeated variables) or produces one partial assignment.
+    let mut bindings = relation_bindings(relations, first, rule.var_count)?;
+    let mut known_vars = first.vars.clone();
+
+    for (index, atom) in rest.iter().cloned().enumerate() {
+        // A natural join is an equality join over variables that appear on
+        // both sides. Because variables have already been lowered to `VarId`,
+        // the join key is just a vector of bound values in a stable order.
+        let shared = known_vars
+            .intersection(&atom.vars)
+            .copied()
+            .collect::<Vec<_>>();
+        // If `shared` is empty, both sides use the empty vector key. That is
+        // the deliberate Cartesian-product case for atoms with no variables in
+        // common.
+        let shared_for_left = shared.clone();
+
+        // The right side is a relation-local arrangement keyed by the columns
+        // where those shared variables occur. If the rule fragment says
+        // `path(x, y), edge(y, z)`, then the `edge` arrangement is keyed by its
+        // first column because that is where `y` appears.
+        let key_columns = atom_key_columns(&atom, &shared)?;
+        let relation_arrangement = arrangements
+            .get(&(atom.relation.clone(), key_columns))
+            .cloned()?;
+        let atom_for_join = atom.clone();
+
+        // The left side is rule-local state: partial bindings from all prior
+        // atoms. It is arranged on the same shared-variable values so
+        // `join_core` can line up matching batches by key.
+        let left_arrangement = bindings
+            .flat_map(move |binding| Some((binding.key(&shared_for_left)?, binding)))
+            .arrange_by_key_named(&format!("Arrange {} left {}", rule.name, index));
+
+        // `join_core` is the low-level arranged join hook. For every matching
+        // key, DD multiplies the signed differences from left and right. The
+        // closure only describes the output record: merge the right relation
+        // row into the left partial binding, dropping the pair if it violates a
+        // constant or repeated-variable equality.
+        bindings = left_arrangement.join_core(relation_arrangement, move |_key, left, row| {
+            left.merge_atom_row(row, &atom_for_join)
+        });
+        known_vars.extend(atom.vars);
+    }
+
+    // Once all body atoms have joined, projecting the head turns bindings back
+    // into relation tuples. The caller attaches the tuple to the head relation
+    // and applies `distinct` at the relation boundary.
+    let head = rule.head;
+    Some(bindings.flat_map(move |binding| binding.project(&head)))
+}
+
+/// Build reusable relation/key arrangements required by the planned joins.
+///
+/// The registry is keyed by `(relation, key_columns)`, so two rules that probe
+/// the same relation on the same column set share one maintained DD
+/// arrangement. Intermediate binding streams are still arranged at each join
+/// point because their schema is rule-local.
+fn relation_arrangements<'scope, T>(
+    relations: &BTreeMap<String, ValueCollection<'scope, T>>,
+    rules: &[PlannedRule],
+) -> BTreeMap<ArrangementKey, RelationArrangement<'scope, T>>
+where
+    T: Timestamp + Lattice + Ord + 'static,
+{
+    let mut required = BTreeSet::<ArrangementKey>::new();
+    for rule in rules {
+        let Some((first, rest)) = rule.body.split_first() else {
+            continue;
+        };
+        let mut known_vars = first.vars.clone();
+        for atom in rest {
+            // Only atoms after the first need pre-built right-side
+            // arrangements. The first atom creates bindings directly from its
+            // relation; every later atom joins against variables already known
+            // from the prefix of the body.
+            let shared = known_vars
+                .intersection(&atom.vars)
+                .copied()
+                .collect::<Vec<_>>();
+            if let Some(columns) = atom_key_columns(atom, &shared) {
+                required.insert((atom.relation.clone(), columns));
+            }
+            known_vars.extend(atom.vars.iter().copied());
+        }
+    }
+
+    let mut arrangements = BTreeMap::new();
+    for (relation, columns) in required {
+        if let Some(collection) = relations.get(&relation) {
+            arrangements.insert(
+                (relation.clone(), columns.clone()),
+                arrange_relation_by_columns(collection.clone(), &relation, columns),
+            );
+        }
+    }
+    arrangements
+}
+
+/// Arrange one relation collection by a selected list of tuple columns.
+///
+/// The arranged key is a `Vec<i64>` containing the selected columns; the value
+/// is the whole tuple, because later projection may need columns not present in
+/// the key. For well-formed scenario rows, the arrangement preserves the
+/// relation tuples while adding a maintained key. This is the first
+/// performance-aware shape in the trial: repeated joins can reuse the same
+/// maintained index instead of scanning a mixed row stream. Atom-local filters
+/// still happen when tuples are converted into bindings or merged into existing
+/// bindings.
+fn arrange_relation_by_columns<'scope, T>(
+    collection: ValueCollection<'scope, T>,
+    relation: &str,
+    columns: Vec<usize>,
+) -> RelationArrangement<'scope, T>
+where
+    T: Timestamp + Lattice + Ord + 'static,
+{
+    let columns_for_rows = columns.clone();
+    collection
+        .flat_map(move |values| {
+            let mut key = Vec::with_capacity(columns_for_rows.len());
+            for column in &columns_for_rows {
+                key.push(*values.get(*column)?);
+            }
+            Some((key, values))
+        })
+        .arrange_by_key_named(&format!("Arrange relation {relation} by {columns:?}"))
+}
+
+/// Locate the tuple columns that should form an atom's join key.
+///
+/// The caller supplies shared variables in a stable `VarId` order. Returning
+/// columns in that same order makes left binding keys and right relation keys
+/// comparable even when a relation stores variables in a different column
+/// order.
+fn atom_key_columns(atom: &PlannedAtom, shared: &[VarId]) -> Option<Vec<usize>> {
+    shared
+        .iter()
+        .map(|var| {
+            atom.terms
+                .iter()
+                .position(|term| matches!(term, PlannedTerm::Var(candidate) if candidate == var))
+        })
+        .collect()
+}
+
+/// Convert rows from one relation into compiled variable bindings.
+///
+/// This is the relation-local equivalent of selecting rows for one atom. It
+/// does not scan a mixed collection; the caller already chose the relation's
+/// collection, so this operator only applies column-local constraints.
+fn relation_bindings<'scope, T>(
+    relations: &BTreeMap<String, ValueCollection<'scope, T>>,
+    atom: &PlannedAtom,
+    var_count: usize,
+) -> Option<BindingCollection<'scope, T>>
+where
+    T: Timestamp + Lattice + Ord + 'static,
+{
+    let collection = relations.get(&atom.relation)?.clone();
+    let atom = atom.clone();
+    Some(collection.flat_map(move |values| match_planned_atom(values, &atom, var_count)))
+}
+
+/// Match one relation-local tuple against one compiled atom.
+///
+/// Constants are filters. Repeated variables are equality filters: binding the
+/// same `VarId` twice succeeds only if the observed values agree.
+fn match_planned_atom(
+    values: Vec<i64>,
+    atom: &PlannedAtom,
+    var_count: usize,
+) -> Option<BindingRow> {
+    if values.len() != atom.terms.len() {
+        return None;
+    }
+
+    let mut binding = BindingRow::empty(var_count);
+    for (term, value) in atom.terms.iter().zip(values) {
+        match term {
+            PlannedTerm::Var(var) => binding.bind(*var, value)?,
+            PlannedTerm::Const(expected) => {
                 if *expected != value {
                     return None;
                 }
@@ -612,26 +1023,269 @@ fn match_atom(row: RelationRow, atom: &Atom) -> Option<Binding> {
         }
     }
 
-    Some(values)
+    Some(binding)
 }
 
-/// Build the DD join key for a binding from a deterministic variable list.
-fn binding_key(binding: &Binding, names: &[String]) -> Vec<i64> {
-    names
-        .iter()
-        .map(|name| *binding.get(name).expect("missing join key variable"))
+impl BindingRow {
+    /// Create an all-unbound row with one slot per rule variable.
+    fn empty(var_count: usize) -> Self {
+        Self {
+            values: vec![None; var_count],
+        }
+    }
+
+    /// Bind a variable or check that an existing binding agrees.
+    ///
+    /// Returning `None` drops the DD record from the stream. In relational
+    /// terms, that is a failed selection predicate, not an exceptional case.
+    fn bind(&mut self, var: VarId, value: i64) -> Option<()> {
+        match self.values.get_mut(var.0)? {
+            Some(existing) if *existing != value => None,
+            Some(_) => Some(()),
+            slot @ None => {
+                *slot = Some(value);
+                Some(())
+            }
+        }
+    }
+
+    /// Project this binding into a join key for the requested variables.
+    fn key(&self, vars: &[VarId]) -> Option<Vec<i64>> {
+        vars.iter()
+            .map(|var| self.values.get(var.0).copied().flatten())
+            .collect()
+    }
+
+    /// Merge one right-side atom tuple into an existing partial binding.
+    ///
+    /// This is the post-key-check part of a natural join. The arrangement key
+    /// already guarantees the shared variables agree; this method also binds
+    /// newly introduced variables and checks constants/repeated variables that
+    /// were not fully represented in the join key.
+    fn merge_atom_row(&self, row: &[i64], atom: &PlannedAtom) -> Option<Self> {
+        if row.len() != atom.terms.len() {
+            return None;
+        }
+
+        let mut merged = self.clone();
+        for (term, value) in atom.terms.iter().zip(row.iter().copied()) {
+            match term {
+                PlannedTerm::Var(var) => merged.bind(*var, value)?,
+                PlannedTerm::Const(expected) if *expected != value => return None,
+                PlannedTerm::Const(_) => {}
+            }
+        }
+        Some(merged)
+    }
+
+    /// Project a complete binding into the rule head tuple.
+    ///
+    /// A missing variable means the rule was ill-planned or the head referenced
+    /// a variable not produced by the body. The compile pass prevents that for
+    /// normal scenarios, so `None` here is a controlled dataflow drop.
+    fn project(&self, head: &PlannedAtom) -> Option<Vec<i64>> {
+        let mut values = Vec::with_capacity(head.terms.len());
+        for term in &head.terms {
+            match term {
+                PlannedTerm::Var(var) => values.push(self.values.get(var.0).copied().flatten()?),
+                PlannedTerm::Const(value) => values.push(*value),
+            }
+        }
+        Some(values)
+    }
+}
+
+/// Compile string variables into stable numeric ids and validate head variables.
+///
+/// This compile step is tiny, but it is the line between readable scenario
+/// specs and efficient DD operators. Anything that can be decided once per
+/// scenario belongs here rather than inside `map`/`flat_map` closures.
+fn compile_rules(rules: &[RuleSpec]) -> TrialResult<Vec<PlannedRule>> {
+    rules.iter().map(compile_rule).collect()
+}
+
+/// Compile one rule from public scenario syntax into a DD execution plan.
+fn compile_rule(rule: &RuleSpec) -> TrialResult<PlannedRule> {
+    if rule.body.is_empty() {
+        return Err(format!("rule {} has an empty body", rule.name).into());
+    }
+
+    let mut vars = BTreeMap::<String, VarId>::new();
+    let mut body = Vec::with_capacity(rule.body.len());
+    for atom in &rule.body {
+        body.push(compile_body_atom(atom, &mut vars));
+    }
+    let head = compile_head_atom(&rule.head, &vars, &rule.name)?;
+
+    Ok(PlannedRule {
+        name: rule.name.clone(),
+        body,
+        head,
+        var_count: vars.len(),
+    })
+}
+
+/// Compile a body atom, assigning new variable ids as names are first seen.
+fn compile_body_atom(atom: &Atom, vars: &mut BTreeMap<String, VarId>) -> PlannedAtom {
+    let mut planned_terms = Vec::with_capacity(atom.terms.len());
+    let mut atom_vars = BTreeSet::new();
+
+    for term in &atom.terms {
+        match term {
+            AtomTerm::Var(name) => {
+                let next = VarId(vars.len());
+                let var = *vars.entry(name.clone()).or_insert(next);
+                atom_vars.insert(var);
+                planned_terms.push(PlannedTerm::Var(var));
+            }
+            AtomTerm::Const(value) => planned_terms.push(PlannedTerm::Const(*value)),
+        }
+    }
+
+    PlannedAtom {
+        relation: atom.relation.clone(),
+        terms: planned_terms,
+        vars: atom_vars,
+    }
+}
+
+/// Compile a head atom and reject variables not bound by the body.
+fn compile_head_atom(
+    atom: &Atom,
+    vars: &BTreeMap<String, VarId>,
+    rule_name: &str,
+) -> TrialResult<PlannedAtom> {
+    let mut planned_terms = Vec::with_capacity(atom.terms.len());
+    let mut atom_vars = BTreeSet::new();
+
+    for term in &atom.terms {
+        match term {
+            AtomTerm::Var(name) => {
+                let var = *vars
+                    .get(name)
+                    .ok_or_else(|| format!("rule {rule_name} head uses unbound variable {name}"))?;
+                atom_vars.insert(var);
+                planned_terms.push(PlannedTerm::Var(var));
+            }
+            AtomTerm::Const(value) => planned_terms.push(PlannedTerm::Const(*value)),
+        }
+    }
+
+    Ok(PlannedAtom {
+        relation: atom.relation.clone(),
+        terms: planned_terms,
+        vars: atom_vars,
+    })
+}
+
+/// Return relation names whose rule dependencies reach themselves.
+///
+/// These are the relations that need DD feedback variables. A full planner
+/// would compute strongly connected components; the trial only needs the set of
+/// cyclic relation names so nonrecursive relations can remain outside the loop.
+fn recursive_relations(rules: &[PlannedRule]) -> BTreeSet<String> {
+    let mut graph = BTreeMap::<String, BTreeSet<String>>::new();
+    for rule in rules {
+        graph
+            .entry(rule.head.relation.clone())
+            .or_default()
+            .extend(rule.body.iter().map(|atom| atom.relation.clone()));
+    }
+
+    graph
+        .keys()
+        .filter(|relation| relation_reaches_itself(relation, &graph))
+        .cloned()
         .collect()
 }
 
-/// Collect distinct variable names referenced by one atom.
-fn atom_vars(atom: &Atom) -> BTreeSet<String> {
-    atom.terms
+/// Depth-first reachability test in the relation-dependency graph.
+fn relation_reaches_itself(relation: &str, graph: &BTreeMap<String, BTreeSet<String>>) -> bool {
+    let mut stack = graph
+        .get(relation)
+        .into_iter()
+        .flatten()
+        .cloned()
+        .collect::<Vec<_>>();
+    let mut visited = BTreeSet::new();
+
+    while let Some(next) = stack.pop() {
+        if next == relation {
+            return true;
+        }
+        if visited.insert(next.clone()) {
+            if let Some(dependencies) = graph.get(&next) {
+                stack.extend(dependencies.iter().cloned());
+            }
+        }
+    }
+
+    false
+}
+
+/// True when any body atom depends on one of the supplied relations.
+fn rule_uses_any_relation(rule: &PlannedRule, relations: &BTreeSet<String>) -> bool {
+    rule.body
         .iter()
-        .filter_map(|term| match term {
-            AtomTerm::Var(name) => Some(name.clone()),
-            AtomTerm::Const(_) => None,
-        })
-        .collect()
+        .any(|atom| relations.contains(&atom.relation))
+}
+
+/// Collect every relation name that might need a DD collection.
+fn relation_names(spec: &ScenarioSpec) -> Vec<String> {
+    let mut names = BTreeSet::new();
+    names.extend(spec.observed_functions.iter().cloned());
+    names.extend(spec.facts.iter().map(|row| row.relation.clone()));
+    for rule in &spec.rules {
+        names.extend(rule.body.iter().map(|atom| atom.relation.clone()));
+        names.insert(rule.head.relation.clone());
+    }
+    names.into_iter().collect()
+}
+
+/// Group initial facts by relation and drop the relation name from hot rows.
+fn fact_values_by_relation(facts: &[RelationRow]) -> BTreeMap<String, Vec<Vec<i64>>> {
+    let mut by_relation = BTreeMap::<String, Vec<Vec<i64>>>::new();
+    for fact in facts {
+        by_relation
+            .entry(fact.relation.clone())
+            .or_default()
+            .push(fact.values.clone());
+    }
+    by_relation
+}
+
+/// Concatenate relation-local value collections into report-shaped rows.
+///
+/// This is intentionally at the edge of the DD program. Before this point, the
+/// relation name is metadata that selects a collection/arrangement; after this
+/// point, it is part of the report key for oracle comparison.
+fn relation_rows_from_collections<'scope, T>(
+    collections: BTreeMap<String, ValueCollection<'scope, T>>,
+) -> Option<RowCollection<'scope, T>>
+where
+    T: Timestamp + Lattice + Ord + 'static,
+{
+    let mut iter = collections.into_iter();
+    let (relation, collection) = iter.next()?;
+    let mut rows = relation_values_to_rows(relation, collection);
+    for (relation, collection) in iter {
+        rows = rows.concat(relation_values_to_rows(relation, collection));
+    }
+    Some(rows)
+}
+
+/// Attach a relation name to every tuple in one value collection.
+fn relation_values_to_rows<'scope, T>(
+    relation: String,
+    collection: ValueCollection<'scope, T>,
+) -> RowCollection<'scope, T>
+where
+    T: Timestamp + Lattice + Ord + 'static,
+{
+    collection.map(move |values| RelationRow {
+        relation: relation.clone(),
+        values,
+    })
 }
 
 /// Export lower rows and projected logical rows for all observed functions.
@@ -777,7 +1431,7 @@ mod tests {
     }
 
     fn scenario_report(name: &str) -> TrialResult<ScenarioReport> {
-        acceptance_scenarios()
+        acceptance_scenarios()?
             .iter()
             .find(|scenario| scenario.name == name)
             .ok_or_else(|| format!("missing scenario {name}").into())
@@ -808,7 +1462,7 @@ mod tests {
 
     #[test]
     fn staged_oracle_snapshots() -> TrialResult<()> {
-        let snapshots = run_native_oracle(&path_scenario())?;
+        let snapshots = run_native_oracle(&path_scenario()?)?;
         let counts = snapshots
             .iter()
             .map(|snapshot| logical_rows(snapshot, "path").map(|rows| rows.len()))
