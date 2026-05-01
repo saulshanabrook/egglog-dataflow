@@ -1,103 +1,107 @@
-//! # Minimal relation-only Differential Dataflow trial against native egglog
-//!
-//! ## What we will build and check
-//!
-//! In this walkthrough we run a tiny relation-only Differential Dataflow model
-//! beside native egglog and check that both produce the same logical rows. Each
-//! scenario is represented twice: native egglog runs a real `.egg` fixture and
-//! exports lower function-table rows through `EGraph::function_for_each`, while
-//! the trial side evaluates a small hand-written relation/rule model in
-//! Differential Dataflow.
-//!
-//! By the end, the acceptance report should say `all_match_oracle: true` for
-//! three scenarios:
-//!
-//! - reachability derives six `path` rows from three `edge` rows;
-//! - repeated-variable matching keeps only `(1, 1)` and `(2, 2)`;
-//! - a three-way join derives `out(1, 5)`, `out(1, 6)`, and `out(9, 5)`.
-//!
-//! Run the visible check with:
-//!
-//! ```text
-//! cargo run --manifest-path code/minimal-dd-trial/Cargo.toml
-//! ```
-//!
-//! You may see compile warnings from the vendored `egglog` crate first. For
-//! this tutorial, ignore those warnings unless the command exits with an error.
-//! The command prints a large JSON report; do not read it top to bottom.
-//!
-//! Check these four success markers:
-//!
-//! ```text
-//! "scenario": "path-reachability"
-//! "scenario": "repeated-variable"
-//! "scenario": "three-way-join"
-//! "all_match_oracle": true
-//! ```
-//!
-//! Then check that each scenario block contains:
-//!
-//! ```text
-//! "matches_oracle": true
-//! ```
-//!
-//! That is the first lesson: the trial is not trying to replace all of egglog.
-//! It runs three small relation programs twice, once in native egglog and once
-//! in the DD model, and checks that the final logical row sets match.
-//!
-//! The comparison deliberately projects logical `i64` input tuples and keeps
-//! lower-row output ids, raw values, sorts, and `subsumed` flags as debug
-//! evidence.
-//! Here "lower rows" means egglog's function-table rows below the rendered
-//! `print-function` / `TermDag` layer: the stored input values, output value,
-//! and subsumption bit used by the database.
-//!
-//! ## Four DD/TD words used in this file
-//!
-//! Keep these local meanings in mind on a first pass:
-//!
-//! - A DD collection is a relation-like multiset of records.
-//! - A signed diff is an update weight: `+1` adds a record and `-1` removes one.
-//! - An arrangement is a maintained index over a collection, like indexing a
-//!   relation by selected columns before a join.
-//! - A Timely scope is the dataflow context where DD operators are connected.
-//!   An iterative scope is the loop form used to keep deriving rows until the
-//!   recursive relation stops changing.
-//!
-//! These definitions are intentionally small. The walkthrough only needs them
-//! to explain how the three acceptance scenarios move through the trial.
-//!
-//! ## What we will use
-//!
-//! We only need a small slice of egglog and DD for this walkthrough: `i64`
-//! relation facts, relation atoms, repeated-variable filters, natural joins,
-//! one recursive reachability loop, and a final comparison against native
-//! egglog's lower rows.
-//!
-//! ## What this walkthrough leaves aside
-//!
-//! This first pass only follows relation facts and relation rules over `i64`.
-//! Equality/rebuild, containers, custom schedulers, host callbacks, extraction,
-//! proofs, direct `ResolvedCoreRule` export, and performance measurement are
-//! later gates. Keep that boundary in mind, but do not follow those threads yet.
-//!
-//! ## The path through the code
-//!
-//! We will follow one successful run in four steps.
-//!
-//! 1. [`acceptance_scenarios`] defines the three tiny programs.
-//! 2. [`run_scenario_trial`] runs native egglog and the DD model for one
-//!    program.
-//! 3. [`dd_evaluate_scenario`] builds the DD collections and captures signed
-//!    updates.
-//! 4. The host nets those signed updates into visible rows and compares them
-//!    with the native lower-row oracle.
-//!
-//! Notice the repeated pattern: each section turns one representation into the
-//! next, then checks a concrete row set.
+<!-- Generated from `src/lib.rs` by `tools/rust_literate.py`; do not edit by hand. -->
 
-//! docs:collapse-next-code title="Imports and crate wiring"
+# Minimal relation-only Differential Dataflow trial against native egglog
 
+## What we will build and check
+
+In this walkthrough we run a tiny relation-only Differential Dataflow model
+beside native egglog and check that both produce the same logical rows. Each
+scenario is represented twice: native egglog runs a real `.egg` fixture and
+exports lower function-table rows through `EGraph::function_for_each`, while
+the trial side evaluates a small hand-written relation/rule model in
+Differential Dataflow.
+
+By the end, the acceptance report should say `all_match_oracle: true` for
+three scenarios:
+
+- reachability derives six `path` rows from three `edge` rows;
+- repeated-variable matching keeps only `(1, 1)` and `(2, 2)`;
+- a three-way join derives `out(1, 5)`, `out(1, 6)`, and `out(9, 5)`.
+
+Run the visible check with:
+
+```text
+cargo run --manifest-path code/minimal-dd-trial/Cargo.toml
+```
+
+You may see compile warnings from the vendored `egglog` crate first. For
+this tutorial, ignore those warnings unless the command exits with an error.
+The command prints a large JSON report; do not read it top to bottom.
+
+Check these four success markers:
+
+```text
+"scenario": "path-reachability"
+"scenario": "repeated-variable"
+"scenario": "three-way-join"
+"all_match_oracle": true
+```
+
+Then check that each scenario block contains:
+
+```text
+"matches_oracle": true
+```
+
+That is the first lesson: the trial is not trying to replace all of egglog.
+It runs three small relation programs twice, once in native egglog and once
+in the DD model, and checks that the final logical row sets match.
+
+The comparison deliberately projects logical `i64` input tuples and keeps
+lower-row output ids, raw values, sorts, and `subsumed` flags as debug
+evidence.
+Here "lower rows" means egglog's function-table rows below the rendered
+`print-function` / `TermDag` layer: the stored input values, output value,
+and subsumption bit used by the database.
+
+## Four DD/TD words used in this file
+
+Keep these local meanings in mind on a first pass:
+
+- A DD collection is a relation-like multiset of records.
+- A signed diff is an update weight: `+1` adds a record and `-1` removes one.
+- An arrangement is a maintained index over a collection, like indexing a
+  relation by selected columns before a join.
+- A Timely scope is the dataflow context where DD operators are connected.
+  An iterative scope is the loop form used to keep deriving rows until the
+  recursive relation stops changing.
+
+These definitions are intentionally small. The walkthrough only needs them
+to explain how the three acceptance scenarios move through the trial.
+
+## What we will use
+
+We only need a small slice of egglog and DD for this walkthrough: `i64`
+relation facts, relation atoms, repeated-variable filters, natural joins,
+one recursive reachability loop, and a final comparison against native
+egglog's lower rows.
+
+## What this walkthrough leaves aside
+
+This first pass only follows relation facts and relation rules over `i64`.
+Equality/rebuild, containers, custom schedulers, host callbacks, extraction,
+proofs, direct `ResolvedCoreRule` export, and performance measurement are
+later gates. Keep that boundary in mind, but do not follow those threads yet.
+
+## The path through the code
+
+We will follow one successful run in four steps.
+
+1. [`acceptance_scenarios`] defines the three tiny programs.
+2. [`run_scenario_trial`] runs native egglog and the DD model for one
+   program.
+3. [`dd_evaluate_scenario`] builds the DD collections and captures signed
+   updates.
+4. The host nets those signed updates into visible rows and compares them
+   with the native lower-row oracle.
+
+Notice the repeated pattern: each section turns one representation into the
+next, then checks a concrete row set.
+
+<details>
+<summary>Imports and crate wiring</summary>
+
+```rust
 use differential_dataflow::input::Input;
 use differential_dataflow::lattice::Lattice;
 use differential_dataflow::operators::iterate::Variable;
@@ -119,13 +123,18 @@ pub const PATH_REACHABILITY_EGG: &str = include_str!("../fixtures/path-reachabil
 pub const REPEATED_VARIABLE_EGG: &str = include_str!("../fixtures/repeated-variable.egg");
 pub const THREE_WAY_JOIN_EGG: &str = include_str!("../fixtures/three-way-join.egg");
 
-// docs:show-code
-// ## Acceptance scenario fixtures
+```
 
-/// All scenarios in the tutorial's success path.
-///
-/// Read these before the evaluator. They give us small expected results that
-/// make the later DD operators easier to follow.
+</details>
+
+## Acceptance scenario fixtures
+
+All scenarios in the tutorial's success path.
+
+Read these before the evaluator. They give us small expected results that
+make the later DD operators easier to follow.
+
+```rust
 pub fn acceptance_scenarios() -> TrialResult<Vec<ScenarioSpec>> {
     Ok(vec![
         path_scenario()?,
@@ -134,14 +143,18 @@ pub fn acceptance_scenarios() -> TrialResult<Vec<ScenarioSpec>> {
     ])
 }
 
-/// Recursive reachability scenario.
-///
-/// Start here. The facts are `edge(1,2)`, `edge(2,3)`, and `edge(3,4)`.
-/// The expected final `path` relation is:
-/// `(1,2)`, `(1,3)`, `(1,4)`, `(2,3)`, `(2,4)`, `(3,4)`.
-///
-/// Notice that `(1,4)` cannot appear from one rule firing; it confirms that
-/// the DD loop reached the recursive fixed point.
+```
+
+Recursive reachability scenario.
+
+Start here. The facts are `edge(1,2)`, `edge(2,3)`, and `edge(3,4)`.
+The expected final `path` relation is:
+`(1,2)`, `(1,3)`, `(1,4)`, `(2,3)`, `(2,4)`, `(3,4)`.
+
+Notice that `(1,4)` cannot appear from one rule firing; it confirms that
+the DD loop reached the recursive fixed point.
+
+```rust
 pub fn path_scenario() -> TrialResult<ScenarioSpec> {
     scenario(
         "path-reachability",
@@ -168,11 +181,15 @@ pub fn path_scenario() -> TrialResult<ScenarioSpec> {
     )
 }
 
-/// Repeated-variable scenario.
-///
-/// The input contains `(1,1)`, `(1,2)`, and `(2,2)`. The atom `pair(x, x)`
-/// should keep only the rows whose two columns are equal, so the expected
-/// `same` rows are `(1)` and `(2)`.
+```
+
+Repeated-variable scenario.
+
+The input contains `(1,1)`, `(1,2)`, and `(2,2)`. The atom `pair(x, x)`
+should keep only the rows whose two columns are equal, so the expected
+`same` rows are `(1)` and `(2)`.
+
+```rust
 pub fn repeated_variable_scenario() -> TrialResult<ScenarioSpec> {
     scenario(
         "repeated-variable",
@@ -189,11 +206,15 @@ pub fn repeated_variable_scenario() -> TrialResult<ScenarioSpec> {
     )
 }
 
-/// Non-recursive three-way join scenario.
-///
-/// Follow the shared variables from left to right: `a(x,y)` joins `b(y,z)`,
-/// then `c(z,w)`, and the rule outputs `out(x,w)`. The expected outputs are
-/// `(1,5)`, `(1,6)`, and `(9,5)`.
+```
+
+Non-recursive three-way join scenario.
+
+Follow the shared variables from left to right: `a(x,y)` joins `b(y,z)`,
+then `c(z,w)`, and the rule outputs `out(x,w)`. The expected outputs are
+`(1,5)`, `(1,6)`, and `(9,5)`.
+
+```rust
 pub fn three_way_join_scenario() -> TrialResult<ScenarioSpec> {
     let mut facts = rows("a", &[&[1, 2], &[9, 9]]);
     facts.extend(rows("b", &[&[2, 3], &[2, 4], &[9, 3]]));
@@ -218,15 +239,18 @@ pub fn three_way_join_scenario() -> TrialResult<ScenarioSpec> {
     )
 }
 
-// docs:show-code
-// ## Trial execution and oracle comparison
+```
 
-/// Run the full tutorial check.
-///
-/// This is the quickest confidence step: it runs all three scenarios and
-/// returns one report. A successful run has `all_match_oracle: true`. If one
-/// scenario fails, keep the report: it contains both the native oracle rows and
-/// the DD rows needed to see where they diverged.
+## Trial execution and oracle comparison
+
+Run the full tutorial check.
+
+This is the quickest confidence step: it runs all three scenarios and
+returns one report. A successful run has `all_match_oracle: true`. If one
+scenario fails, keep the report: it contains both the native oracle rows and
+the DD rows needed to see where they diverged.
+
+```rust
 pub fn run_acceptance_trial() -> TrialResult<TrialReport> {
     let specs = acceptance_scenarios()?;
     let scenarios = specs
@@ -252,14 +276,22 @@ pub fn run_acceptance_trial() -> TrialResult<TrialReport> {
     })
 }
 
-/// Run one scenario through native egglog and the DD evaluator, then compare.
-///
-/// This is the main semantic gate: native egglog provides lower-row oracle
-/// snapshots, DD computes relation rows, and both sides are projected to sorted
-/// logical `i64` rows for exact equality.
+```
+
+Run one scenario through native egglog and the DD evaluator, then compare.
+
+This is the main semantic gate: native egglog provides lower-row oracle
+snapshots, DD computes relation rows, and both sides are projected to sorted
+logical `i64` rows for exact equality.
+
+```rust
 pub fn run_scenario_trial(spec: &ScenarioSpec) -> TrialResult<ScenarioReport> {
-    // Each scenario is run twice: native egglog exports lower table rows as the
-    // oracle, while DD evaluates the small relation-only model.
+```
+
+Each scenario is run twice: native egglog exports lower table rows as the
+oracle, while DD evaluates the small relation-only model.
+
+```rust
     let oracle_snapshots = run_native_oracle(spec)?;
     let final_snapshot = oracle_snapshots
         .last()
@@ -304,27 +336,34 @@ pub fn run_scenario_trial(spec: &ScenarioSpec) -> TrialResult<ScenarioReport> {
     })
 }
 
-// docs:show-code
-// ## Differential Dataflow evaluator
-//
-// This is the main DD-side path. Read it with `path-reachability` in mind:
-// `edge` facts enter as base collections, `edge -> path` seeds direct paths,
-// `path(x,y), edge(y,z) -> path(x,z)` runs in the recursive loop, and captured
-// signed updates are netted into the six final `path` rows.
+```
 
-/// Evaluate one scenario with the DD model.
-///
-/// Watch for three transitions:
-///
-/// - facts become one DD collection per relation;
-/// - rules add derived rows until recursive relations stop changing;
-/// - captured signed updates are netted into the final visible row set.
-///
-/// The final `BTreeSet<RelationRow>` is what we compare with native egglog.
+## Differential Dataflow evaluator
+
+This is the main DD-side path. Read it with `path-reachability` in mind:
+`edge` facts enter as base collections, `edge -> path` seeds direct paths,
+`path(x,y), edge(y,z) -> path(x,z)` runs in the recursive loop, and captured
+signed updates are netted into the six final `path` rows.
+
+Evaluate one scenario with the DD model.
+
+Watch for three transitions:
+
+- facts become one DD collection per relation;
+- rules add derived rows until recursive relations stop changing;
+- captured signed updates are netted into the final visible row set.
+
+The final `BTreeSet<RelationRow>` is what we compare with native egglog.
+
+```rust
 pub fn dd_evaluate_scenario(spec: &ScenarioSpec) -> TrialResult<BTreeSet<RelationRow>> {
-    // Planning happens before the Timely dataflow is built. That keeps the
-    // closure that constructs operators focused on data movement, not string
-    // lookup or scenario validation.
+```
+
+Planning happens before the Timely dataflow is built. That keeps the
+closure that constructs operators focused on data movement, not string
+lookup or scenario validation.
+
+```rust
     let planned_rules = compile_rules(&spec.rules)?;
     let relation_names = relation_names(spec);
     if relation_names.is_empty() {
@@ -333,26 +372,38 @@ pub fn dd_evaluate_scenario(spec: &ScenarioSpec) -> TrialResult<BTreeSet<Relatio
 
     let facts_by_relation = fact_values_by_relation(&spec.facts);
 
-    // `timely::example` creates one worker, builds this dataflow, runs it to
-    // completion, and returns the captured updates. For this tutorial, that
-    // gives us one finished result to compare with the oracle.
+```
+
+`timely::example` creates one worker, builds this dataflow, runs it to
+completion, and returns the captured updates. For this tutorial, that
+gives us one finished result to compare with the oracle.
+
+```rust
     let captured = timely::example(move |scope| {
         let mut base_by_relation = BTreeMap::new();
         for relation in &relation_names {
             let facts = facts_by_relation.get(relation).cloned().unwrap_or_default();
 
-            // `new_collection_from` converts an ordinary Rust iterator into an
-            // initial DD collection at time zero with positive unit diffs. The
-            // handle is ignored because these fixtures are static; dynamic
-            // update experiments would keep it, advance time, and feed signed
-            // changes across epochs.
+```
+
+`new_collection_from` converts an ordinary Rust iterator into an
+initial DD collection at time zero with positive unit diffs. The
+handle is ignored because these fixtures are static; dynamic
+update experiments would keep it, advance time, and feed signed
+changes across epochs.
+
+```rust
             let (_input, collection) = scope.new_collection_from(facts);
             base_by_relation.insert(relation.clone(), collection);
         }
 
-        // The evaluator keeps one collection per relation until the end. That
-        // shape mirrors how DD joins want to see data: relation-local streams
-        // can be arranged by relation-specific keys and reused.
+```
+
+The evaluator keeps one collection per relation until the end. That
+shape mirrors how DD joins want to see data: relation-local streams
+can be arranged by relation-specific keys and reused.
+
+```rust
         let relation_rows = relation_rows_from_collections(relation_fixpoint(
             base_by_relation,
             relation_names,
@@ -363,19 +414,27 @@ pub fn dd_evaluate_scenario(spec: &ScenarioSpec) -> TrialResult<BTreeSet<Relatio
             empty
         });
 
-        // `consolidate` combines equal `(row, time)` updates before capture.
-        // It is not the semantic comparison by itself; it just reduces the
-        // amount of update traffic that leaves the dataflow. `.inner` exposes
-        // the underlying Timely stream of DD update batches. Capture gives the
-        // host the raw signed update batches; the semantic row set is computed
-        // only below by summing diffs per row.
+```
+
+`consolidate` combines equal `(row, time)` updates before capture.
+It is not the semantic comparison by itself; it just reduces the
+amount of update traffic that leaves the dataflow. `.inner` exposes
+the underlying Timely stream of DD update batches. Capture gives the
+host the raw signed update batches; the semantic row set is computed
+only below by summing diffs per row.
+
+```rust
         relation_rows.consolidate().inner.capture()
     });
 
-    // Capture gives us signed DD updates, not final rows. Sum the diffs first.
-    // A row is visible only when its net diff is positive. This is the key
-    // check: the tutorial compares final relation contents, not raw update
-    // events.
+```
+
+Capture gives us signed DD updates, not final rows. Sum the diffs first.
+A row is visible only when its net diff is positive. This is the key
+check: the tutorial compares final relation contents, not raw update
+events.
+
+```rust
     let mut diffs = BTreeMap::<RelationRow, isize>::new();
     for (_capture_time, batch) in captured.extract() {
         for (row, _data_time, diff) in batch {
@@ -389,20 +448,25 @@ pub fn dd_evaluate_scenario(spec: &ScenarioSpec) -> TrialResult<BTreeSet<Relatio
         .collect())
 }
 
-// docs:show-code
-// ## Timely iteration and relation-local fixpoints
-//
-// This is the recursive part of the evaluator. Open the implementation when
-// you want to see exactly how relation-local collections enter Timely's loop,
-// how DD feeds the recursive relation back, and where `distinct` turns signed
-// updates into set semantics.
-// docs:collapse-section title="Implementation: relation fixpoint and recursive feedback"
+```
 
-/// Decide which rules need the DD feedback loop.
-///
-/// In the reachability scenario, `path` depends on itself through
-/// `path(x,y), edge(y,z) -> path(x,z)`, so `path` goes into the loop.
-/// Non-recursive relations stay outside the loop and are used as stable inputs.
+## Timely iteration and relation-local fixpoints
+
+This is the recursive part of the evaluator. Open the implementation when
+you want to see exactly how relation-local collections enter Timely's loop,
+how DD feeds the recursive relation back, and where `distinct` turns signed
+updates into set semantics.
+
+<details>
+<summary>Implementation: relation fixpoint and recursive feedback</summary>
+
+Decide which rules need the DD feedback loop.
+
+In the reachability scenario, `path` depends on itself through
+`path(x,y), edge(y,z) -> path(x,z)`, so `path` goes into the loop.
+Non-recursive relations stay outside the loop and are used as stable inputs.
+
+```rust
 fn relation_fixpoint<'scope, T>(
     base_by_relation: BTreeMap<String, ValueCollection<'scope, T>>,
     relation_names: Vec<String>,
@@ -412,9 +476,13 @@ where
     T: Timestamp + Lattice + Ord + 'static,
     T::Summary: Default + Clone,
 {
-    // For the reachability scenario, this finds that `path` is recursive. That
-    // is the relation that must keep feeding newly discovered rows back through
-    // the rules until no new `path` rows appear.
+```
+
+For the reachability scenario, this finds that `path` is recursive. That
+is the relation that must keep feeding newly discovered rows back through
+the rules until no new `path` rows appear.
+
+```rust
     let recursive_relations = recursive_relations(&rules);
     let mut pre_rules = Vec::new();
     let mut recursive_rules = Vec::new();
@@ -430,11 +498,15 @@ where
         }
     }
 
-    // Rules whose heads and bodies are outside the cyclic relation set run
-    // first. Rules producing cyclic relations run inside the loop, including
-    // nonrecursive seed rules such as `edge -> path`. Finally, rules that
-    // depend on recursive outputs but do not themselves feed a cycle are
-    // saturated once the recursive fixed point is available.
+```
+
+Rules whose heads and bodies are outside the cyclic relation set run
+first. Rules producing cyclic relations run inside the loop, including
+nonrecursive seed rules such as `edge -> path`. Finally, rules that
+depend on recursive outputs but do not themselves feed a cycle are
+saturated once the recursive fixed point is available.
+
+```rust
     let mut relations = apply_nonrecursive_rules(base_by_relation, &pre_rules);
     if !recursive_relations.is_empty() {
         let recursive_outputs = recursive_relation_fixpoint(
@@ -451,14 +523,18 @@ where
     apply_nonrecursive_rules(relations, &post_rules)
 }
 
-/// Run the recursive part of the rule set in one Timely iterative scope.
-///
-/// For the reachability scenario, this is the "keep going until no new paths
-/// appear" step. Timely supplies the loop structure; DD's [`Variable`] is the
-/// feedback point that carries newly discovered rows into the next loop round.
-/// The product timestamp detail below is implementation plumbing for that
-/// loop: the outer time is the input epoch, and the inner `u64` counts loop
-/// rounds.
+```
+
+Run the recursive part of the rule set in one Timely iterative scope.
+
+For the reachability scenario, this is the "keep going until no new paths
+appear" step. Timely supplies the loop structure; DD's [`Variable`] is the
+feedback point that carries newly discovered rows into the next loop round.
+The product timestamp detail below is implementation plumbing for that
+loop: the outer time is the input epoch, and the inner `u64` counts loop
+rounds.
+
+```rust
 fn recursive_relation_fixpoint<'scope, T>(
     base_by_relation: BTreeMap<String, ValueCollection<'scope, T>>,
     relation_names: Vec<String>,
@@ -485,13 +561,21 @@ where
             .push(rule);
     }
 
-    // `iterative` opens a nested Timely scope. Collections from the outer scope
-    // must be `enter`ed to participate in the loop, and loop results must
-    // `leave` back to the outer scope. The type parameter `u64` is the loop
-    // timestamp coordinate.
+```
+
+`iterative` opens a nested Timely scope. Collections from the outer scope
+must be `enter`ed to participate in the loop, and loop results must
+`leave` back to the outer scope. The type parameter `u64` is the loop
+timestamp coordinate.
+
+```rust
     outer.clone().iterative::<u64, _, _>(move |nested| {
-        // The feedback summary advances only the inner loop coordinate by one;
-        // the outer timestamp stays at the input epoch.
+```
+
+The feedback summary advances only the inner loop coordinate by one;
+the outer timestamp stays at the input epoch.
+
+```rust
         let summary = Product::new(Default::default(), 1);
         let mut variables = Vec::new();
         let mut current_by_relation = BTreeMap::new();
@@ -499,29 +583,41 @@ where
         for relation in &relation_names {
             if let Some(base) = base_by_relation.get(relation) {
                 if recursive_relations.contains(relation) {
-                    // `Variable::new_from` exposes a collection named
-                    // `current` whose logical contents are base rows plus the
-                    // current feedback rows. When we later call `set(next)`,
-                    // DD subtracts the original base before feeding rows back,
-                    // so the loop sends only the incremental correction. That
-                    // is why `next` is written as the whole desired relation,
-                    // not just the newly derived rows.
+```
+
+`Variable::new_from` exposes a collection named
+`current` whose logical contents are base rows plus the
+current feedback rows. When we later call `set(next)`,
+DD subtracts the original base before feeding rows back,
+so the loop sends only the incremental correction. That
+is why `next` is written as the whole desired relation,
+not just the newly derived rows.
+
+```rust
                     let (variable, current) =
                         Variable::new_from(base.clone().enter(nested), summary.clone());
                     variables.push((relation.clone(), variable));
                     current_by_relation.insert(relation.clone(), current);
                 } else {
-                    // Nonrecursive relations are stable facts from the loop's
-                    // perspective. They can still be arranged and joined
-                    // inside the loop, but no feedback variable is needed.
+```
+
+Nonrecursive relations are stable facts from the loop's
+perspective. They can still be arranged and joined
+inside the loop, but no feedback variable is needed.
+
+```rust
                     current_by_relation.insert(relation.clone(), base.clone().enter(nested));
                 }
             }
         }
 
-        // Build arrangements over the current loop collections. For recursive
-        // relations these arrangements are maintained as the loop discovers
-        // new rows; for stable relations they are ordinary indexed inputs.
+```
+
+Build arrangements over the current loop collections. For recursive
+relations these arrangements are maintained as the loop discovers
+new rows; for stable relations they are ordinary indexed inputs.
+
+```rust
         let arrangements = relation_arrangements(&current_by_relation, &rules);
         let mut next_inner = BTreeMap::new();
         let mut outputs = BTreeMap::new();
@@ -542,11 +638,15 @@ where
                 }
             }
 
-            // `concat` preserves signed multiplicities from base and derived
-            // rows. `distinct` is the Datalog set-semantics boundary: DD treats
-            // a tuple with non-zero accumulated weight as one occurrence. It
-            // also provides the consolidation boundary required for a DD loop
-            // to stop circulating cancelable differences.
+```
+
+`concat` preserves signed multiplicities from base and derived
+rows. `distinct` is the Datalog set-semantics boundary: DD treats
+a tuple with non-zero accumulated weight as one occurrence. It
+also provides the consolidation boundary required for a DD loop
+to stop circulating cancelable differences.
+
+```rust
             let next = base.concat(derived).distinct();
             outputs.insert(relation.clone(), next.clone().leave(outer.clone()));
             next_inner.insert(relation.clone(), next);
@@ -554,9 +654,13 @@ where
 
         for (relation, variable) in variables {
             if let Some(next) = next_inner.remove(&relation) {
-                // Binding the variable connects the loop feedback edge. The
-                // variable is consumed here so each recursive relation has
-                // exactly one definition inside this iterative scope.
+```
+
+Binding the variable connects the loop feedback edge. The
+variable is consumed here so each recursive relation has
+exactly one definition inside this iterative scope.
+
+```rust
                 variable.set(next);
             }
         }
@@ -565,11 +669,15 @@ where
     })
 }
 
-/// Saturate acyclic rules in the current scope.
-///
-/// These rules do not need DD feedback. Repeating the small rule set is enough
-/// for this tutorial's acyclic chains, then the result can feed the recursive
-/// or final comparison steps.
+```
+
+Saturate acyclic rules in the current scope.
+
+These rules do not need DD feedback. Repeating the small rule set is enough
+for this tutorial's acyclic chains, then the result can feed the recursive
+or final comparison steps.
+
+```rust
 fn apply_nonrecursive_rules<'scope, T>(
     mut relations: BTreeMap<String, ValueCollection<'scope, T>>,
     rules: &[PlannedRule],
@@ -592,20 +700,26 @@ where
     relations
 }
 
-// docs:end-collapse-section
-// docs:show-code
-// ## Arranged rule evaluation
-//
-// This section evaluates one rule body as relation-local bindings and arranged
-// joins. Open it when you want the column-level mechanics behind repeated
-// variables, shared-variable join keys, and head projection.
-// docs:collapse-section title="Implementation: arranged rule evaluation and atom matching"
+```
 
-/// Evaluate one rule body as a sequence of joins.
-///
-/// Follow the `path-step` rule as the main example: first bind `path(x, y)`,
-/// then join `edge(y, z)` on the shared `y`, then project the completed binding
-/// into `path(x, z)`.
+</details>
+
+## Arranged rule evaluation
+
+This section evaluates one rule body as relation-local bindings and arranged
+joins. Open it when you want the column-level mechanics behind repeated
+variables, shared-variable join keys, and head projection.
+
+<details>
+<summary>Implementation: arranged rule evaluation and atom matching</summary>
+
+Evaluate one rule body as a sequence of joins.
+
+Follow the `path-step` rule as the main example: first bind `path(x, y)`,
+then join `edge(y, z)` on the shared `y`, then project the completed binding
+into `path(x, z)`.
+
+```rust
 fn apply_planned_rule<'scope, T>(
     relations: &BTreeMap<String, ValueCollection<'scope, T>>,
     arrangements: &BTreeMap<ArrangementKey, RelationArrangement<'scope, T>>,
@@ -616,66 +730,98 @@ where
 {
     let (first, rest) = rule.body.split_first()?;
 
-    // The first atom seeds the binding stream. At this point there is no join:
-    // matching one relation tuple either fails atom-local filters
-    // (constants/repeated variables) or produces one partial assignment.
+```
+
+The first atom seeds the binding stream. At this point there is no join:
+matching one relation tuple either fails atom-local filters
+(constants/repeated variables) or produces one partial assignment.
+
+```rust
     let mut bindings = relation_bindings(relations, first, rule.var_count)?;
     let mut known_vars = first.vars.clone();
 
     for (index, atom) in rest.iter().cloned().enumerate() {
-        // A natural join is an equality join over variables that appear on
-        // both sides. Because variables have already been lowered to `VarId`,
-        // the join key is just a vector of bound values in a stable order.
+```
+
+A natural join is an equality join over variables that appear on
+both sides. Because variables have already been lowered to `VarId`,
+the join key is just a vector of bound values in a stable order.
+
+```rust
         let shared = known_vars
             .intersection(&atom.vars)
             .copied()
             .collect::<Vec<_>>();
-        // If `shared` is empty, both sides use the empty vector key. That is
-        // the deliberate Cartesian-product case for atoms with no variables in
-        // common.
+```
+
+If `shared` is empty, both sides use the empty vector key. That is
+the deliberate Cartesian-product case for atoms with no variables in
+common.
+
+```rust
         let shared_for_left = shared.clone();
 
-        // The right side is a relation-local arrangement keyed by the columns
-        // where those shared variables occur. If the rule fragment says
-        // `path(x, y), edge(y, z)`, then the `edge` arrangement is keyed by its
-        // first column because that is where `y` appears.
+```
+
+The right side is a relation-local arrangement keyed by the columns
+where those shared variables occur. If the rule fragment says
+`path(x, y), edge(y, z)`, then the `edge` arrangement is keyed by its
+first column because that is where `y` appears.
+
+```rust
         let key_columns = atom_key_columns(&atom, &shared)?;
         let relation_arrangement = arrangements
             .get(&(atom.relation.clone(), key_columns))
             .cloned()?;
         let atom_for_join = atom.clone();
 
-        // The left side is rule-local state: partial bindings from all prior
-        // atoms. It is arranged on the same shared-variable values so
-        // `join_core` can line up matching batches by key.
+```
+
+The left side is rule-local state: partial bindings from all prior
+atoms. It is arranged on the same shared-variable values so
+`join_core` can line up matching batches by key.
+
+```rust
         let left_arrangement = bindings
             .flat_map(move |binding| Some((binding.key(&shared_for_left)?, binding)))
             .arrange_by_key_named(&format!("Arrange {} left {}", rule.name, index));
 
-        // `join_core` is the low-level arranged join hook. For every matching
-        // key, DD multiplies the signed differences from left and right. The
-        // closure only describes the output record: merge the right relation
-        // row into the left partial binding, dropping the pair if it violates a
-        // constant or repeated-variable equality.
+```
+
+`join_core` is the low-level arranged join hook. For every matching
+key, DD multiplies the signed differences from left and right. The
+closure only describes the output record: merge the right relation
+row into the left partial binding, dropping the pair if it violates a
+constant or repeated-variable equality.
+
+```rust
         bindings = left_arrangement.join_core(relation_arrangement, move |_key, left, row| {
             left.merge_atom_row(row, &atom_for_join)
         });
         known_vars.extend(atom.vars);
     }
 
-    // Once all body atoms have joined, projecting the head turns bindings back
-    // into relation tuples. The caller attaches the tuple to the head relation
-    // and applies `distinct` at the relation boundary.
+```
+
+Once all body atoms have joined, projecting the head turns bindings back
+into relation tuples. The caller attaches the tuple to the head relation
+and applies `distinct` at the relation boundary.
+
+```rust
     let head = rule.head;
     Some(bindings.flat_map(move |binding| binding.project(&head)))
 }
 
-/// Build reusable relation/key arrangements required by the planned joins.
-///
-/// The registry is keyed by `(relation, key_columns)`, so two rules that probe
-/// the same relation on the same column set share one maintained DD
-/// arrangement. Intermediate binding streams are still arranged at each join
-/// point because their schema is rule-local.
+```
+
+Build reusable relation/key arrangements required by the planned joins.
+
+The registry is keyed by `(relation, key_columns)`, so two rules that probe
+the same relation on the same column set share one maintained DD
+arrangement. Intermediate binding streams are still arranged at each join
+point because their schema is rule-local.
+
+```rust
 fn relation_arrangements<'scope, T>(
     relations: &BTreeMap<String, ValueCollection<'scope, T>>,
     rules: &[PlannedRule],
@@ -690,10 +836,14 @@ where
         };
         let mut known_vars = first.vars.clone();
         for atom in rest {
-            // Only atoms after the first need pre-built right-side
-            // arrangements. The first atom creates bindings directly from its
-            // relation; every later atom joins against variables already known
-            // from the prefix of the body.
+```
+
+Only atoms after the first need pre-built right-side
+arrangements. The first atom creates bindings directly from its
+relation; every later atom joins against variables already known
+from the prefix of the body.
+
+```rust
             let shared = known_vars
                 .intersection(&atom.vars)
                 .copied()
@@ -717,16 +867,20 @@ where
     arrangements
 }
 
-/// Arrange one relation collection by a selected list of tuple columns.
-///
-/// The arranged key is a `Vec<i64>` containing the selected columns; the value
-/// is the whole tuple, because later projection may need columns not present in
-/// the key. For well-formed scenario rows, the arrangement preserves the
-/// relation tuples while adding a maintained key. This is the first
-/// performance-aware shape in the trial: repeated joins can reuse the same
-/// maintained index instead of scanning a mixed row stream. Atom-local filters
-/// still happen when tuples are converted into bindings or merged into existing
-/// bindings.
+```
+
+Arrange one relation collection by a selected list of tuple columns.
+
+The arranged key is a `Vec<i64>` containing the selected columns; the value
+is the whole tuple, because later projection may need columns not present in
+the key. For well-formed scenario rows, the arrangement preserves the
+relation tuples while adding a maintained key. This is the first
+performance-aware shape in the trial: repeated joins can reuse the same
+maintained index instead of scanning a mixed row stream. Atom-local filters
+still happen when tuples are converted into bindings or merged into existing
+bindings.
+
+```rust
 fn arrange_relation_by_columns<'scope, T>(
     collection: ValueCollection<'scope, T>,
     relation: &str,
@@ -747,12 +901,16 @@ where
         .arrange_by_key_named(&format!("Arrange relation {relation} by {columns:?}"))
 }
 
-/// Locate the tuple columns that should form an atom's join key.
-///
-/// The caller supplies shared variables in a stable `VarId` order. Returning
-/// columns in that same order makes left binding keys and right relation keys
-/// comparable even when a relation stores variables in a different column
-/// order.
+```
+
+Locate the tuple columns that should form an atom's join key.
+
+The caller supplies shared variables in a stable `VarId` order. Returning
+columns in that same order makes left binding keys and right relation keys
+comparable even when a relation stores variables in a different column
+order.
+
+```rust
 fn atom_key_columns(atom: &PlannedAtom, shared: &[VarId]) -> Option<Vec<usize>> {
     shared
         .iter()
@@ -764,11 +922,15 @@ fn atom_key_columns(atom: &PlannedAtom, shared: &[VarId]) -> Option<Vec<usize>> 
         .collect()
 }
 
-/// Convert rows from one relation into compiled variable bindings.
-///
-/// This is the relation-local equivalent of selecting rows for one atom. It
-/// does not scan a mixed collection; the caller already chose the relation's
-/// collection, so this operator only applies column-local constraints.
+```
+
+Convert rows from one relation into compiled variable bindings.
+
+This is the relation-local equivalent of selecting rows for one atom. It
+does not scan a mixed collection; the caller already chose the relation's
+collection, so this operator only applies column-local constraints.
+
+```rust
 fn relation_bindings<'scope, T>(
     relations: &BTreeMap<String, ValueCollection<'scope, T>>,
     atom: &PlannedAtom,
@@ -782,10 +944,14 @@ where
     Some(collection.flat_map(move |values| match_planned_atom(values, &atom, var_count)))
 }
 
-/// Match one relation-local tuple against one compiled atom.
-///
-/// Constants are filters. Repeated variables are equality filters: binding the
-/// same `VarId` twice succeeds only if the observed values agree.
+```
+
+Match one relation-local tuple against one compiled atom.
+
+Constants are filters. Repeated variables are equality filters: binding the
+same `VarId` twice succeeds only if the observed values agree.
+
+```rust
 fn match_planned_atom(
     values: Vec<i64>,
     atom: &PlannedAtom,
@@ -810,25 +976,30 @@ fn match_planned_atom(
     Some(binding)
 }
 
-// docs:end-collapse-section
-// docs:show-code
-// ## Regression tests
-//
-// End the tutorial here. These tests are the compact executable checkpoints for
-// the row sets named above. If the JSON report was too large to inspect by
-// hand, run:
-//
-// ```text
-// cargo test --manifest-path code/minimal-dd-trial/Cargo.toml --lib
-// ```
-//
-// The important checks are the same as the walkthrough: the path scenario
-// derives six rows, repeated-variable matching keeps `same(1)` and `same(2)`,
-// the three-way join derives three `out` rows, and the aggregate report says
-// all scenarios match the native oracle. Reference appendices follow the
-// tests for readers who want implementation details.
-// docs:collapse-section title="Regression test code"
+```
 
+</details>
+
+## Regression tests
+
+End the tutorial here. These tests are the compact executable checkpoints for
+the row sets named above. If the JSON report was too large to inspect by
+hand, run:
+
+```text
+cargo test --manifest-path code/minimal-dd-trial/Cargo.toml --lib
+```
+
+The important checks are the same as the walkthrough: the path scenario
+derives six rows, repeated-variable matching keeps `same(1)` and `same(2)`,
+the three-way join derives three `out` rows, and the aggregate report says
+all scenarios match the native oracle. Reference appendices follow the
+tests for readers who want implementation details.
+
+<details>
+<summary>Regression test code</summary>
+
+```rust
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -957,38 +1128,48 @@ mod tests {
     }
 }
 
-// docs:end-collapse-section
-// docs:show-code
-// ## Reference appendices
-//
-// The tutorial path above is enough for a first pass. The remaining sections are
-// expandable reference material for the exact data model, planning metadata,
-// oracle export, compilation helpers, binding operations, and construction
-// helpers.
+```
 
-// ## Public scenario and report data model
-//
-// These types name the JSON report fields from the tutorial path: scenario
-// inputs, native egglog snapshots, DD rows, and the final match flag. Keep
-// this appendix collapsed unless you need the exact report schema.
-// docs:collapse-section title="Appendix: scenario and report data types"
+</details>
 
-/// Logical relation tuple used by the DD model.
-///
-/// This is the DD-side row identity for the first gate: a relation name plus
-/// the logical `i64` input tuple. It intentionally does not include egglog's
-/// lower-row output/eclass id, because those ids are oracle debug evidence
-/// rather than the relation payload being compared.
+## Reference appendices
+
+The tutorial path above is enough for a first pass. The remaining sections are
+expandable reference material for the exact data model, planning metadata,
+oracle export, compilation helpers, binding operations, and construction
+helpers.
+
+## Public scenario and report data model
+
+These types name the JSON report fields from the tutorial path: scenario
+inputs, native egglog snapshots, DD rows, and the final match flag. Keep
+this appendix collapsed unless you need the exact report schema.
+
+<details>
+<summary>Appendix: scenario and report data types</summary>
+
+Logical relation tuple used by the DD model.
+
+This is the DD-side row identity for the first gate: a relation name plus
+the logical `i64` input tuple. It intentionally does not include egglog's
+lower-row output/eclass id, because those ids are oracle debug evidence
+rather than the relation payload being compared.
+
+```rust
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 pub struct RelationRow {
     pub relation: String,
     pub values: Vec<i64>,
 }
 
-/// Term in a relation atom.
-///
-/// Constants are supported by the matcher because they naturally fall out of
-/// atom filtering, although the first acceptance scenarios only need variables.
+```
+
+Term in a relation atom.
+
+Constants are supported by the matcher because they naturally fall out of
+atom filtering, although the first acceptance scenarios only need variables.
+
+```rust
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 #[serde(tag = "kind", content = "value", rename_all = "snake_case")]
 pub enum AtomTerm {
@@ -996,14 +1177,22 @@ pub enum AtomTerm {
     Const(i64),
 }
 
-/// A body or head atom in the small relation-rule language.
+```
+
+A body or head atom in the small relation-rule language.
+
+```rust
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 pub struct Atom {
     pub relation: String,
     pub terms: Vec<AtomTerm>,
 }
 
-/// One Datalog-shaped rule for the DD trial evaluator.
+```
+
+One Datalog-shaped rule for the DD trial evaluator.
+
+```rust
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 pub struct RuleSpec {
     pub name: String,
@@ -1011,37 +1200,53 @@ pub struct RuleSpec {
     pub head: Atom,
 }
 
-/// Paired native-oracle and DD-model description for one scenario.
-///
-/// `stages` are fed to native egglog for oracle snapshots. `facts` and `rules`
-/// are the manually inspected DD model of the same relation-only program.
+```
+
+Paired native-oracle and DD-model description for one scenario.
+
+`stages` are fed to native egglog for oracle snapshots. `facts` and `rules`
+are the manually inspected DD model of the same relation-only program.
+
+```rust
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ScenarioSpec {
     pub name: String,
     pub observed_functions: Vec<String>,
-    // Native egglog stages are the oracle program. The DD side intentionally
-    // uses the hand-written facts/rules below so the mapping stays inspectable.
+```
+
+Native egglog stages are the oracle program. The DD side intentionally
+uses the hand-written facts/rules below so the mapping stays inspectable.
+
+```rust
     pub stages: Vec<ScenarioStage>,
     pub facts: Vec<RelationRow>,
     pub rules: Vec<RuleSpec>,
 }
 
-/// One native egglog execution step.
-///
-/// Staging lets the oracle expose intermediate lower-row snapshots while the DD
-/// side currently computes the final relation closure in one dataflow.
+```
+
+One native egglog execution step.
+
+Staging lets the oracle expose intermediate lower-row snapshots while the DD
+side currently computes the final relation closure in one dataflow.
+
+```rust
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ScenarioStage {
     pub label: String,
     pub program: String,
 }
 
-/// Raw lower function-table row exported from native egglog.
-///
-/// These rows preserve the details needed to debug the oracle boundary: schema
-/// sort names, raw lower values, decoded inputs/output where possible, and the
-/// `subsumed` bit. Logical comparison is derived from these rows but does not
-/// discard them from the report.
+```
+
+Raw lower function-table row exported from native egglog.
+
+These rows preserve the details needed to debug the oracle boundary: schema
+sort names, raw lower values, decoded inputs/output where possible, and the
+`subsumed` bit. Logical comparison is derived from these rows but does not
+discard them from the report.
+
+```rust
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub struct LowerRow {
     pub function: String,
@@ -1053,10 +1258,14 @@ pub struct LowerRow {
     pub subsumed: bool,
 }
 
-/// Decoded lower-row value.
-///
-/// The first gate only projects `i64` input columns into `LogicalRow`; other
-/// values remain raw so non-`i64` evidence is still visible in reports.
+```
+
+Decoded lower-row value.
+
+The first gate only projects `i64` input columns into `LogicalRow`; other
+values remain raw so non-`i64` evidence is still visible in reports.
+
+```rust
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum DecodedValue {
@@ -1064,14 +1273,22 @@ pub enum DecodedValue {
     Raw { sort: String, value: String },
 }
 
-/// Comparable logical row projected from native lower rows or DD rows.
+```
+
+Comparable logical row projected from native lower rows or DD rows.
+
+```rust
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub struct LogicalRow {
     pub function: String,
     pub values: Vec<i64>,
 }
 
-/// Native egglog oracle snapshot after one staged execution step.
+```
+
+Native egglog oracle snapshot after one staged execution step.
+
+```rust
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct OracleSnapshot {
     pub stage: String,
@@ -1079,7 +1296,11 @@ pub struct OracleSnapshot {
     pub logical_rows: BTreeMap<String, Vec<LogicalRow>>,
 }
 
-/// Per-scenario result comparing native lower rows with DD logical rows.
+```
+
+Per-scenario result comparing native lower rows with DD logical rows.
+
+```rust
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ScenarioReport {
     pub scenario: String,
@@ -1089,7 +1310,11 @@ pub struct ScenarioReport {
     pub matches_oracle: bool,
 }
 
-/// Aggregate acceptance report emitted by the CLI and tests.
+```
+
+Aggregate acceptance report emitted by the CLI and tests.
+
+```rust
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TrialReport {
     pub scenarios: Vec<ScenarioReport>,
@@ -1098,52 +1323,74 @@ pub struct TrialReport {
     pub limitations: Vec<String>,
 }
 
-// docs:end-collapse-section
-// docs:show-code
-// ## DD names used by the evaluator
-//
-// This is a glossary-in-code, not the main path. Read the short comments here
-// only to translate later code: rows become DD collections, joins use
-// arrangements, and rule matches are carried as compact variable bindings.
-// docs:collapse-section title="Appendix: DD evaluator aliases and planning types"
+```
 
-/// Relation-local DD collection used by the evaluator.
-///
-/// A `VecCollection<'scope, T, D, R>` is Differential Dataflow's multiset-like
-/// collection abstraction in a Timely scope. Here `D = Vec<i64>` is one logical
-/// tuple for a single relation and `R = isize` is the signed difference type:
-/// `+1` means an occurrence arrives, `-1` means it is retracted, and larger
-/// magnitudes are possible after aggregation.
+</details>
+
+## DD names used by the evaluator
+
+This is a glossary-in-code, not the main path. Read the short comments here
+only to translate later code: rows become DD collections, joins use
+arrangements, and rule matches are carried as compact variable bindings.
+
+<details>
+<summary>Appendix: DD evaluator aliases and planning types</summary>
+
+Relation-local DD collection used by the evaluator.
+
+A `VecCollection<'scope, T, D, R>` is Differential Dataflow's multiset-like
+collection abstraction in a Timely scope. Here `D = Vec<i64>` is one logical
+tuple for a single relation and `R = isize` is the signed difference type:
+`+1` means an occurrence arrives, `-1` means it is retracted, and larger
+magnitudes are possible after aggregation.
+
+```rust
 type ValueCollection<'scope, T> = VecCollection<'scope, T, Vec<i64>, isize>;
 
-/// DD collection after relation-local values are reattached to relation names.
-///
-/// Internally we avoid a mixed row collection while planning rules, because
-/// scanning all rows for every atom hides the relation/key structure that DD is
-/// good at exploiting. We only rebuild mixed `RelationRow`s at the output
-/// boundary so reporting and oracle comparison stay simple.
+```
+
+DD collection after relation-local values are reattached to relation names.
+
+Internally we avoid a mixed row collection while planning rules, because
+scanning all rows for every atom hides the relation/key structure that DD is
+good at exploiting. We only rebuild mixed `RelationRow`s at the output
+boundary so reporting and oracle comparison stay simple.
+
+```rust
 type RowCollection<'scope, T> = VecCollection<'scope, T, RelationRow, isize>;
 
-/// DD collection of partial rule bindings.
-///
-/// During a rule join, each record is a compact vector indexed by compiled
-/// variable id. This replaces string-keyed maps in the hot path and makes join
-/// keys explicit column projections.
+```
+
+DD collection of partial rule bindings.
+
+During a rule join, each record is a compact vector indexed by compiled
+variable id. This replaces string-keyed maps in the hot path and makes join
+keys explicit column projections.
+
+```rust
 type BindingCollection<'scope, T> = VecCollection<'scope, T, BindingRow, isize>;
 
-/// Registry key for a maintained arrangement: relation name plus key columns.
-///
-/// Arrangements are DD's reusable indexed representation of a collection. The
-/// same relation can be arranged several ways if different rules probe it by
-/// different shared-variable columns.
+```
+
+Registry key for a maintained arrangement: relation name plus key columns.
+
+Arrangements are DD's reusable indexed representation of a collection. The
+same relation can be arranged several ways if different rules probe it by
+different shared-variable columns.
+
+```rust
 type ArrangementKey = (String, Vec<usize>);
 
-/// Concrete arrangement type for `Vec<i64>` relation tuples.
-///
-/// This alias is noisy because it exposes DD's lower trace implementation. The
-/// useful idea is simpler: an `Arranged` collection is logically the same data
-/// as the input relation, but maintained as keyed batches/traces so joins can
-/// reuse indexed state instead of rebuilding an index at every probe.
+```
+
+Concrete arrangement type for `Vec<i64>` relation tuples.
+
+This alias is noisy because it exposes DD's lower trace implementation. The
+useful idea is simpler: an `Arranged` collection is logically the same data
+as the input relation, but maintained as keyed batches/traces so joins can
+reuse indexed state instead of rebuilding an index at every probe.
+
+```rust
 type RelationArrangement<'scope, T> = differential_dataflow::operators::arrange::Arranged<
     'scope,
     differential_dataflow::operators::arrange::TraceAgent<
@@ -1154,20 +1401,28 @@ type RelationArrangement<'scope, T> = differential_dataflow::operators::arrange:
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 struct VarId(usize);
 
-/// Compiled atom term.
-///
-/// Public scenarios use variable names for readability. The DD operators use
-/// `VarId`s so a binding can be a vector lookup instead of a map lookup.
+```
+
+Compiled atom term.
+
+Public scenarios use variable names for readability. The DD operators use
+`VarId`s so a binding can be a vector lookup instead of a map lookup.
+
+```rust
 #[derive(Clone, Debug)]
 enum PlannedTerm {
     Var(VarId),
     Const(i64),
 }
 
-/// Body or head atom after lowering names to relation metadata.
-///
-/// `vars` is cached because each join step needs to know which variables are
-/// already bound on the left and which variables an atom can contribute.
+```
+
+Body or head atom after lowering names to relation metadata.
+
+`vars` is cached because each join step needs to know which variables are
+already bound on the left and which variables an atom can contribute.
+
+```rust
 #[derive(Clone, Debug)]
 struct PlannedAtom {
     relation: String,
@@ -1175,10 +1430,14 @@ struct PlannedAtom {
     vars: BTreeSet<VarId>,
 }
 
-/// Rule after the once-per-scenario compile pass.
-///
-/// `var_count` fixes the width of each [`BindingRow`]. Body atoms can introduce
-/// variables; head atoms may only project variables already bound by the body.
+```
+
+Rule after the once-per-scenario compile pass.
+
+`var_count` fixes the width of each [`BindingRow`]. Body atoms can introduce
+variables; head atoms may only project variables already bound by the body.
+
+```rust
 #[derive(Clone, Debug)]
 struct PlannedRule {
     name: String,
@@ -1187,26 +1446,36 @@ struct PlannedRule {
     var_count: usize,
 }
 
-/// Compact partial assignment carried through DD joins.
-///
-/// The vector position is a [`VarId`]. `None` means this variable has not been
-/// bound by the atoms processed so far; `Some(value)` means every occurrence of
-/// that variable must agree with `value`.
+```
+
+Compact partial assignment carried through DD joins.
+
+The vector position is a [`VarId`]. `None` means this variable has not been
+bound by the atoms processed so far; `Some(value)` means every occurrence of
+that variable must agree with `value`.
+
+```rust
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 struct BindingRow {
     values: Vec<Option<i64>>,
 }
 
-// docs:end-collapse-section
-// docs:show-code
-// ## Native oracle and report helpers
-// docs:collapse-section title="Appendix: native oracle and report helpers"
+```
 
-/// Execute the staged native egglog oracle for a scenario.
-///
-/// All stages run on one `EGraph`, so later snapshots include effects from
-/// earlier declarations, facts, and runs. This matches the explicit staged
-/// boundary the MVP intends to compare against.
+</details>
+
+## Native oracle and report helpers
+
+<details>
+<summary>Appendix: native oracle and report helpers</summary>
+
+Execute the staged native egglog oracle for a scenario.
+
+All stages run on one `EGraph`, so later snapshots include effects from
+earlier declarations, facts, and runs. This matches the explicit staged
+boundary the MVP intends to compare against.
+
+```rust
 pub fn run_native_oracle(spec: &ScenarioSpec) -> TrialResult<Vec<OracleSnapshot>> {
     let mut egraph = EGraph::default();
     let mut snapshots = Vec::new();
@@ -1223,10 +1492,14 @@ pub fn run_native_oracle(spec: &ScenarioSpec) -> TrialResult<Vec<OracleSnapshot>
     Ok(snapshots)
 }
 
-/// Run a complete `.egg` fixture and return one final lower-row snapshot.
-///
-/// Tests use this for the direct oracle preflight where no staged replay is
-/// needed.
+```
+
+Run a complete `.egg` fixture and return one final lower-row snapshot.
+
+Tests use this for the direct oracle preflight where no staged replay is
+needed.
+
+```rust
 pub fn run_fixture_program(
     program: &str,
     observed_functions: &[String],
@@ -1236,7 +1509,11 @@ pub fn run_fixture_program(
     snapshot_functions(&egraph, "fixture-final", observed_functions)
 }
 
-/// Write a JSON acceptance report, creating the parent directory if needed.
+```
+
+Write a JSON acceptance report, creating the parent directory if needed.
+
+```rust
 pub fn write_report(path: impl AsRef<Path>, report: &TrialReport) -> TrialResult<()> {
     let path = path.as_ref();
     if let Some(parent) = path.parent() {
@@ -1247,7 +1524,11 @@ pub fn write_report(path: impl AsRef<Path>, report: &TrialReport) -> TrialResult
     Ok(())
 }
 
-/// Fetch projected logical rows for one function from an oracle snapshot.
+```
+
+Fetch projected logical rows for one function from an oracle snapshot.
+
+```rust
 pub fn logical_rows(snapshot: &OracleSnapshot, function: &str) -> TrialResult<Vec<LogicalRow>> {
     snapshot
         .logical_rows
@@ -1256,12 +1537,18 @@ pub fn logical_rows(snapshot: &OracleSnapshot, function: &str) -> TrialResult<Ve
         .ok_or_else(|| format!("missing logical rows for function {function}").into())
 }
 
-// docs:end-collapse-section
-// docs:show-code
-// ## Native egglog lower-row oracle
-// docs:collapse-section title="Appendix: lower-row oracle export"
+```
 
-/// Export lower rows and projected logical rows for all observed functions.
+</details>
+
+## Native egglog lower-row oracle
+
+<details>
+<summary>Appendix: lower-row oracle export</summary>
+
+Export lower rows and projected logical rows for all observed functions.
+
+```rust
 fn snapshot_functions(
     egraph: &EGraph,
     stage: &str,
@@ -1271,10 +1558,14 @@ fn snapshot_functions(
     let mut logical = BTreeMap::new();
 
     for function in functions {
-        // This is the oracle boundary: read the public lower function table
-        // rows, not rendered `print-function` / TermDag output. The schema tells
-        // us how many leading `vals` entries are logical inputs; the next value
-        // is the lower output/eclass id.
+```
+
+This is the oracle boundary: read the public lower function table
+rows, not rendered `print-function` / TermDag output. The schema tells
+us how many leading `vals` entries are logical inputs; the next value
+is the lower output/eclass id.
+
+```rust
         let function_info = egraph
             .get_function(function)
             .ok_or_else(|| format!("missing function {function}"))?;
@@ -1345,7 +1636,11 @@ fn snapshot_functions(
     })
 }
 
-/// Decode a lower egglog value using the sort name when this trial understands it.
+```
+
+Decode a lower egglog value using the sort name when this trial understands it.
+
+```rust
 fn decode_value(egraph: &EGraph, sort: &str, value: Value) -> DecodedValue {
     if sort == "i64" {
         DecodedValue::I64 {
@@ -1359,26 +1654,40 @@ fn decode_value(egraph: &EGraph, sort: &str, value: Value) -> DecodedValue {
     }
 }
 
-/// Stable debug rendering for lower values this trial does not decode.
+```
+
+Stable debug rendering for lower values this trial does not decode.
+
+```rust
 fn raw_value(value: &Value) -> String {
     format!("{value:?}")
 }
 
-// docs:end-collapse-section
-// docs:show-code
-// ## Rule compilation
-// docs:collapse-section title="Appendix: rule compilation and dependency analysis"
+```
 
-/// Compile string variables into stable numeric ids and validate head variables.
-///
-/// This compile step is tiny, but it is the line between readable scenario
-/// specs and efficient DD operators. Anything that can be decided once per
-/// scenario belongs here rather than inside `map`/`flat_map` closures.
+</details>
+
+## Rule compilation
+
+<details>
+<summary>Appendix: rule compilation and dependency analysis</summary>
+
+Compile string variables into stable numeric ids and validate head variables.
+
+This compile step is tiny, but it is the line between readable scenario
+specs and efficient DD operators. Anything that can be decided once per
+scenario belongs here rather than inside `map`/`flat_map` closures.
+
+```rust
 fn compile_rules(rules: &[RuleSpec]) -> TrialResult<Vec<PlannedRule>> {
     rules.iter().map(compile_rule).collect()
 }
 
-/// Compile one rule from public scenario syntax into a DD execution plan.
+```
+
+Compile one rule from public scenario syntax into a DD execution plan.
+
+```rust
 fn compile_rule(rule: &RuleSpec) -> TrialResult<PlannedRule> {
     if rule.body.is_empty() {
         return Err(format!("rule {} has an empty body", rule.name).into());
@@ -1399,7 +1708,11 @@ fn compile_rule(rule: &RuleSpec) -> TrialResult<PlannedRule> {
     })
 }
 
-/// Compile a body atom, assigning new variable ids as names are first seen.
+```
+
+Compile a body atom, assigning new variable ids as names are first seen.
+
+```rust
 fn compile_body_atom(atom: &Atom, vars: &mut BTreeMap<String, VarId>) -> PlannedAtom {
     let mut planned_terms = Vec::with_capacity(atom.terms.len());
     let mut atom_vars = BTreeSet::new();
@@ -1423,7 +1736,11 @@ fn compile_body_atom(atom: &Atom, vars: &mut BTreeMap<String, VarId>) -> Planned
     }
 }
 
-/// Compile a head atom and reject variables not bound by the body.
+```
+
+Compile a head atom and reject variables not bound by the body.
+
+```rust
 fn compile_head_atom(
     atom: &Atom,
     vars: &BTreeMap<String, VarId>,
@@ -1452,11 +1769,15 @@ fn compile_head_atom(
     })
 }
 
-/// Return relation names whose rule dependencies reach themselves.
-///
-/// These are the relations that need DD feedback variables. A full planner
-/// would compute strongly connected components; the trial only needs the set of
-/// cyclic relation names so nonrecursive relations can remain outside the loop.
+```
+
+Return relation names whose rule dependencies reach themselves.
+
+These are the relations that need DD feedback variables. A full planner
+would compute strongly connected components; the trial only needs the set of
+cyclic relation names so nonrecursive relations can remain outside the loop.
+
+```rust
 fn recursive_relations(rules: &[PlannedRule]) -> BTreeSet<String> {
     let mut graph = BTreeMap::<String, BTreeSet<String>>::new();
     for rule in rules {
@@ -1473,7 +1794,11 @@ fn recursive_relations(rules: &[PlannedRule]) -> BTreeSet<String> {
         .collect()
 }
 
-/// Depth-first reachability test in the relation-dependency graph.
+```
+
+Depth-first reachability test in the relation-dependency graph.
+
+```rust
 fn relation_reaches_itself(relation: &str, graph: &BTreeMap<String, BTreeSet<String>>) -> bool {
     let mut stack = graph
         .get(relation)
@@ -1497,30 +1822,47 @@ fn relation_reaches_itself(relation: &str, graph: &BTreeMap<String, BTreeSet<Str
     false
 }
 
-/// True when any body atom depends on one of the supplied relations.
+```
+
+True when any body atom depends on one of the supplied relations.
+
+```rust
 fn rule_uses_any_relation(rule: &PlannedRule, relations: &BTreeSet<String>) -> bool {
     rule.body
         .iter()
         .any(|atom| relations.contains(&atom.relation))
 }
 
-// docs:end-collapse-section
-// docs:show-code
-// ## Binding operations
-// docs:collapse-section title="Appendix: binding row operations"
+```
 
+</details>
+
+## Binding operations
+
+<details>
+<summary>Appendix: binding row operations</summary>
+
+```rust
 impl BindingRow {
-    /// Create an all-unbound row with one slot per rule variable.
+```
+
+Create an all-unbound row with one slot per rule variable.
+
+```rust
     fn empty(var_count: usize) -> Self {
         Self {
             values: vec![None; var_count],
         }
     }
 
-    /// Bind a variable or check that an existing binding agrees.
-    ///
-    /// Returning `None` drops the DD record from the stream. In relational
-    /// terms, that is a failed selection predicate, not an exceptional case.
+```
+
+Bind a variable or check that an existing binding agrees.
+
+Returning `None` drops the DD record from the stream. In relational
+terms, that is a failed selection predicate, not an exceptional case.
+
+```rust
     fn bind(&mut self, var: VarId, value: i64) -> Option<()> {
         match self.values.get_mut(var.0)? {
             Some(existing) if *existing != value => None,
@@ -1532,19 +1874,27 @@ impl BindingRow {
         }
     }
 
-    /// Project this binding into a join key for the requested variables.
+```
+
+Project this binding into a join key for the requested variables.
+
+```rust
     fn key(&self, vars: &[VarId]) -> Option<Vec<i64>> {
         vars.iter()
             .map(|var| self.values.get(var.0).copied().flatten())
             .collect()
     }
 
-    /// Merge one right-side atom tuple into an existing partial binding.
-    ///
-    /// This is the post-key-check part of a natural join. The arrangement key
-    /// already guarantees the shared variables agree; this method also binds
-    /// newly introduced variables and checks constants/repeated variables that
-    /// were not fully represented in the join key.
+```
+
+Merge one right-side atom tuple into an existing partial binding.
+
+This is the post-key-check part of a natural join. The arrangement key
+already guarantees the shared variables agree; this method also binds
+newly introduced variables and checks constants/repeated variables that
+were not fully represented in the join key.
+
+```rust
     fn merge_atom_row(&self, row: &[i64], atom: &PlannedAtom) -> Option<Self> {
         if row.len() != atom.terms.len() {
             return None;
@@ -1561,11 +1911,15 @@ impl BindingRow {
         Some(merged)
     }
 
-    /// Project a complete binding into the rule head tuple.
-    ///
-    /// A missing variable means the rule was ill-planned or the head referenced
-    /// a variable not produced by the body. The compile pass prevents that for
-    /// normal scenarios, so `None` here is a controlled dataflow drop.
+```
+
+Project a complete binding into the rule head tuple.
+
+A missing variable means the rule was ill-planned or the head referenced
+a variable not produced by the body. The compile pass prevents that for
+normal scenarios, so `None` here is a controlled dataflow drop.
+
+```rust
     fn project(&self, head: &PlannedAtom) -> Option<Vec<i64>> {
         let mut values = Vec::with_capacity(head.terms.len());
         for term in &head.terms {
@@ -1578,12 +1932,18 @@ impl BindingRow {
     }
 }
 
-// docs:end-collapse-section
-// docs:show-code
-// ## Relation inventory and report conversion
-// docs:collapse-section title="Appendix: relation inventory and report conversion"
+```
 
-/// Collect every relation name that might need a DD collection.
+</details>
+
+## Relation inventory and report conversion
+
+<details>
+<summary>Appendix: relation inventory and report conversion</summary>
+
+Collect every relation name that might need a DD collection.
+
+```rust
 fn relation_names(spec: &ScenarioSpec) -> Vec<String> {
     let mut names = BTreeSet::new();
     names.extend(spec.observed_functions.iter().cloned());
@@ -1595,7 +1955,11 @@ fn relation_names(spec: &ScenarioSpec) -> Vec<String> {
     names.into_iter().collect()
 }
 
-/// Group initial facts by relation and drop the relation name from hot rows.
+```
+
+Group initial facts by relation and drop the relation name from hot rows.
+
+```rust
 fn fact_values_by_relation(facts: &[RelationRow]) -> BTreeMap<String, Vec<Vec<i64>>> {
     let mut by_relation = BTreeMap::<String, Vec<Vec<i64>>>::new();
     for fact in facts {
@@ -1607,11 +1971,15 @@ fn fact_values_by_relation(facts: &[RelationRow]) -> BTreeMap<String, Vec<Vec<i6
     by_relation
 }
 
-/// Concatenate relation-local value collections into report-shaped rows.
-///
-/// This is intentionally at the edge of the DD program. Before this point, the
-/// relation name is metadata that selects a collection/arrangement; after this
-/// point, it is part of the report key for oracle comparison.
+```
+
+Concatenate relation-local value collections into report-shaped rows.
+
+This is intentionally at the edge of the DD program. Before this point, the
+relation name is metadata that selects a collection/arrangement; after this
+point, it is part of the report key for oracle comparison.
+
+```rust
 fn relation_rows_from_collections<'scope, T>(
     collections: BTreeMap<String, ValueCollection<'scope, T>>,
 ) -> Option<RowCollection<'scope, T>>
@@ -1627,7 +1995,11 @@ where
     Some(rows)
 }
 
-/// Attach a relation name to every tuple in one value collection.
+```
+
+Attach a relation name to every tuple in one value collection.
+
+```rust
 fn relation_values_to_rows<'scope, T>(
     relation: String,
     collection: ValueCollection<'scope, T>,
@@ -1641,16 +2013,22 @@ where
     })
 }
 
-// docs:end-collapse-section
-// docs:show-code
-// ## Scenario-construction helpers
-// docs:collapse-section title="Appendix: scenario-construction helpers"
+```
 
-/// Construct a scenario from a native fixture and an explicit DD model.
-///
-/// The fixture remains the source of truth for native egglog execution. The
-/// DD facts/rules are intentionally written next to the fixture reference so a
-/// reader can audit the mapping instead of trusting a parser or bridge.
+</details>
+
+## Scenario-construction helpers
+
+<details>
+<summary>Appendix: scenario-construction helpers</summary>
+
+Construct a scenario from a native fixture and an explicit DD model.
+
+The fixture remains the source of truth for native egglog execution. The
+DD facts/rules are intentionally written next to the fixture reference so a
+reader can audit the mapping instead of trusting a parser or bridge.
+
+```rust
 fn scenario(
     name: &str,
     fixture: &str,
@@ -1712,4 +2090,6 @@ fn names(values: &[&str]) -> Vec<String> {
     values.iter().map(|value| value.to_string()).collect()
 }
 
-// docs:end-collapse-section
+```
+
+</details>
