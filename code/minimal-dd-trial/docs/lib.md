@@ -6,10 +6,9 @@
 
 In this walkthrough we run a tiny relation-only Differential Dataflow model
 beside native egglog and check that both produce the same logical rows. Each
-scenario is represented twice: native egglog runs a real `.egg` fixture and
-exports lower function-table rows through `EGraph::function_for_each`, while
-the trial side evaluates a small hand-written relation/rule model in
-Differential Dataflow.
+scenario is represented twice: native egglog runs a real `.egg` fixture as
+the oracle, while the trial side evaluates a small hand-written relation/rule
+model in Differential Dataflow.
 
 By the end, the acceptance report should say `all_match_oracle: true` for
 three scenarios:
@@ -18,41 +17,49 @@ three scenarios:
 - repeated-variable matching keeps only `(1, 1)` and `(2, 2)`;
 - a three-way join derives `out(1, 5)`, `out(1, 6)`, and `out(9, 5)`.
 
-Run the visible check with:
+## Before you start
+
+Run commands from the repository root. You need Rust/Cargo and the vendored
+`repos/egglog` checkout already present. If Cargo prints warnings from
+vendored egglog but exits successfully, continue.
+
+Run the visible check and write a compact report with:
 
 ```text
-cargo run --manifest-path code/minimal-dd-trial/Cargo.toml
+cargo run --quiet --manifest-path code/minimal-dd-trial/Cargo.toml -- \
+  --out code/minimal-dd-trial/target/tutorial-report.json
+python3 - <<'PY'
+import json
+from pathlib import Path
+
+report = json.loads(Path("code/minimal-dd-trial/target/tutorial-report.json").read_text())
+print(f"all_match_oracle: {report['all_match_oracle']}")
+for scenario in report["scenarios"]:
+    print(f"{scenario['scenario']}: {scenario['matches_oracle']}")
+PY
 ```
 
-You may see compile warnings from the vendored `egglog` crate first. For
-this tutorial, ignore those warnings unless the command exits with an error.
-The command prints a large JSON report; do not read it top to bottom.
+You may still see vendored egglog warnings before this summary; the compact
+lines below are the part to check.
 
-Check these four success markers:
-
-```text
-"scenario": "path-reachability"
-"scenario": "repeated-variable"
-"scenario": "three-way-join"
-"all_match_oracle": true
-```
-
-Then check that each scenario block contains:
+Expected compact output:
 
 ```text
-"matches_oracle": true
+all_match_oracle: True
+path-reachability: True
+repeated-variable: True
+three-way-join: True
 ```
 
 That is the first lesson: the trial is not trying to replace all of egglog.
-It runs three small relation programs twice, once in native egglog and once
-in the DD model, and checks that the final logical row sets match.
+It runs three small relation programs twice and checks that the final logical
+row sets match.
 
-The comparison deliberately projects logical `i64` input tuples and keeps
-lower-row output ids, raw values, sorts, and `subsumed` flags as debug
-evidence.
-Here "lower rows" means egglog's function-table rows below the rendered
-`print-function` / `TermDag` layer: the stored input values, output value,
-and subsumption bit used by the database.
+We treat native egglog as the oracle. For each observed relation, we read
+egglog's stored function-table rows, ignore subsumed rows, decode only `i64`
+inputs, and compare those logical tuples with the DD result. You do not need
+to know egglog's internal row format yet; the raw row fields remain in the
+report only for debugging.
 
 ## Four DD/TD words used in this file
 
@@ -74,7 +81,7 @@ to explain how the three acceptance scenarios move through the trial.
 We only need a small slice of egglog and DD for this walkthrough: `i64`
 relation facts, relation atoms, repeated-variable filters, natural joins,
 one recursive reachability loop, and a final comparison against native
-egglog's lower rows.
+egglog's stored function-table rows.
 
 ## What this walkthrough leaves aside
 
@@ -128,6 +135,23 @@ pub const THREE_WAY_JOIN_EGG: &str = include_str!("../fixtures/three-way-join.eg
 </details>
 
 ## Acceptance scenario fixtures
+
+Before reading the evaluator, predict the final row sets. The rest of the
+tutorial checks that DD produces exactly these rows:
+
+- `path-reachability`: `edge(1,2)`, `edge(2,3)`, and `edge(3,4)` should
+  derive `path(1,2)`, `path(1,3)`, `path(1,4)`, `path(2,3)`, `path(2,4)`,
+  and `path(3,4)`.
+- `repeated-variable`: `pair(x, x) -> same(x)` should keep only `same(1)`
+  and `same(2)` from `pair(1,1)`, `pair(1,2)`, and `pair(2,2)`.
+- `three-way-join`: `a(x,y), b(y,z), c(z,w) -> out(x,w)` should derive
+  `out(1,5)`, `out(1,6)`, and `out(9,5)`.
+
+Open the fixture construction below only if you want to see how those facts
+and rules are encoded as `ScenarioSpec` values.
+
+<details>
+<summary>Scenario fixture construction code</summary>
 
 All scenarios in the tutorial's success path.
 
@@ -241,6 +265,8 @@ pub fn three_way_join_scenario() -> TrialResult<ScenarioSpec> {
 
 ```
 
+</details>
+
 ## Trial execution and oracle comparison
 
 Run the full tutorial check.
@@ -344,6 +370,13 @@ This is the main DD-side path. Read it with `path-reachability` in mind:
 `edge` facts enter as base collections, `edge -> path` seeds direct paths,
 `path(x,y), edge(y,z) -> path(x,z)` runs in the recursive loop, and captured
 signed updates are netted into the six final `path` rows.
+
+For `path-reachability`, the concrete trace is:
+
+- base `edge = {(1,2), (2,3), (3,4)}`;
+- the seed rule adds direct `path` rows `(1,2)`, `(2,3)`, and `(3,4)`;
+- the recursive rule adds `(1,3)` and `(2,4)`, then `(1,4)`;
+- after signed diffs are netted, the visible `path` set has six rows.
 
 Evaluate one scenario with the DD model.
 
@@ -452,10 +485,16 @@ events.
 
 ## Timely iteration and relation-local fixpoints
 
-This is the recursive part of the evaluator. Open the implementation when
-you want to see exactly how relation-local collections enter Timely's loop,
-how DD feeds the recursive relation back, and where `distinct` turns signed
-updates into set semantics.
+For reachability, the DD loop is the "keep deriving paths until nothing new
+appears" step. The `path` relation starts empty, the seed rule adds direct
+edges as paths, and the recursive rule uses each newly discovered `path(x,y)`
+with `edge(y,z)` to derive `path(x,z)`. `distinct` gives the relation
+set-like behavior, so rediscovering an existing path does not create another
+visible row.
+
+Open the implementation when you want to see how relation-local collections
+enter Timely's loop, how DD feeds the recursive relation back, and where
+`distinct` turns signed updates into set semantics.
 
 <details>
 <summary>Implementation: relation fixpoint and recursive feedback</summary>
@@ -706,9 +745,16 @@ where
 
 ## Arranged rule evaluation
 
-This section evaluates one rule body as relation-local bindings and arranged
-joins. Open it when you want the column-level mechanics behind repeated
-variables, shared-variable join keys, and head projection.
+The concrete join for reachability is `path(x,y), edge(y,z) -> path(x,z)`.
+Once `path` contains `(1,2)` and `edge` contains `(2,3)`, both sides meet on
+the shared value `y = 2`. The joined binding is `x = 1, y = 2, z = 3`, and
+projecting the head emits `path(1,3)`.
+
+DD makes that efficient by using relation-local arrangements: the right side
+can be indexed by the columns used as join keys instead of scanning one mixed
+row stream for every atom. Open the implementation when you want the
+column-level mechanics behind repeated variables, shared-variable join keys,
+and head projection.
 
 <details>
 <summary>Implementation: arranged rule evaluation and atom matching</summary>
@@ -980,21 +1026,26 @@ fn match_planned_atom(
 
 </details>
 
-## Regression tests
+## Run the executable checks again
 
-End the tutorial here. These tests are the compact executable checkpoints for
-the row sets named above. If the JSON report was too large to inspect by
-hand, run:
+End the tutorial with the executable checkpoint. This command repeats the
+same row-set checks without asking you to inspect the JSON report:
 
 ```text
 cargo test --manifest-path code/minimal-dd-trial/Cargo.toml --lib
 ```
 
-The important checks are the same as the walkthrough: the path scenario
-derives six rows, repeated-variable matching keeps `same(1)` and `same(2)`,
-the three-way join derives three `out` rows, and the aggregate report says
-all scenarios match the native oracle. Reference appendices follow the
-tests for readers who want implementation details.
+You should see six passing tests. They check the same outcomes as the
+walkthrough: the path scenario derives six rows, repeated-variable matching
+keeps `same(1)` and `same(2)`, the three-way join derives three `out` rows,
+and the aggregate report says all scenarios match the native oracle.
+
+At this point, you have run the DD trial, predicted the row sets it should
+produce, followed the reachability path through collection setup, recursion,
+joins, and netted output, and confirmed the same checks with tests.
+
+Reference appendices follow the tests for readers who want implementation
+details.
 
 <details>
 <summary>Regression test code</summary>
